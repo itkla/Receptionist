@@ -52,7 +52,6 @@ export async function PUT(request: Request, { params }: RouteParams) {
         }
 
         // 3. Check Current Status - Should be RECEIVED
-        // @ts-ignore
         if (shipment.status !== ShipmentStatus.RECEIVED) {
             return NextResponse.json(
                 { error: `Shipment cannot be verified, status is ${shipment.status.toLowerCase()}, expected RECEIVED.` },

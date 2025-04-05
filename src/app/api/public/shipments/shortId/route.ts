@@ -120,7 +120,6 @@ export async function PUT(request: Request, { params }: RouteParams) {
         const updatedShipment = await prisma.shipment.update({
             where: { id: shipmentId },
             data: {
-                // @ts-ignore - Bypassing incorrect linter error about ShipmentStatus enum
                 status: ShipmentStatus.RECEIVED,
                 recipientName: recipientName.trim(),
                 recipientSignature: signature,

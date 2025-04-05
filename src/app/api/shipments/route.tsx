@@ -94,7 +94,6 @@ export async function POST(request: Request) {
                     senderEmail,
                     status: ShipmentStatus.PENDING,
                     location: locationConnectOrCreate,
-                    // @ts-ignore - Bypassing persistent type error after schema update
                     trackingNumber: trackingNumber || null,
                     devices: {
                         create: devices.map((device: DeviceInput) => ({

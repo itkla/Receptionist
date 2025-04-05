@@ -48,7 +48,7 @@ export const sendEmail = async ({ to, subject, react }: SendEmailOptions): Promi
             from: fromEmail, // Use the validated fromEmail from env
             to: to,
             subject: subject,
-            // @ts-ignore Linter incorrectly assumes render() is async
+            // @ts-expect-error Linter incorrectly assumes render() is async
             html: html,
         });
 
