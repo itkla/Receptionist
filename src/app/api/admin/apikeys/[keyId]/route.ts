@@ -3,10 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
+// Define an interface for the route context params
+interface ApiKeyRouteContext {
+  params: {
+    keyId: string;
+  };
+}
+
 // PATCH: Update an API Key (e.g., toggle isActive)
 export async function PATCH(
   request: Request,
-  { params }: { params: { keyId: string } }
+  { params }: ApiKeyRouteContext
 ) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -48,14 +55,15 @@ export async function PATCH(
 // DELETE: Remove an API Key
 export async function DELETE(
   request: Request,
-  { params }: { params: { keyId: string } }
+  context: ApiKeyRouteContext
 ) {
   const session = await getServerSession(authOptions);
   if (!session || !session.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { keyId } = params;
+  // Destructure keyId from the context params
+  const { keyId } = context.params;
 
   if (!keyId) {
     return NextResponse.json({ error: 'API Key ID is required' }, { status: 400 });
