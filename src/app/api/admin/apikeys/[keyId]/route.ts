@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -12,9 +12,9 @@ interface ApiKeyRouteContext {
 
 // PATCH: Update an API Key (e.g., toggle isActive)
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: ApiKeyRouteContext
-) {
+): Promise<NextResponse> {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -54,9 +54,9 @@ export async function PATCH(
 
 // DELETE: Remove an API Key
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   context: ApiKeyRouteContext
-) {
+): Promise<NextResponse> {
   const session = await getServerSession(authOptions);
   if (!session || !session.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
