@@ -73,6 +73,7 @@
     "@types/webpack": "^5.28.5",
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "prisma": "^6.5.0",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
