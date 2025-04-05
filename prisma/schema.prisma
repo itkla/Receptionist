@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Shipment {
+  id             String    @id @default(cuid())
+  shortId        String    @unique // 6-character unique ID
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  senderName     String
+  senderEmail    String // For notifications
+  status         ShipmentStatus @default(PENDING)
+  trackingNumber String?   // Optional: Carrier tracking number
+  manifestUrl    String?   // Link to PDF in Supabase Storage
+  recipientName  String?
+  recipientEmail String?   // Email used for specific receipt/signature
+  recipientSignature String? // Store signature data URL
+  trackingId     String?   // Optional: Carrier tracking ID
+  trackingInfo   Json?     // Optional: Store structured tracking data (e.g., OpenStreetMap coordinates, carrier updates)
+  receivedAt     DateTime?
+
+  carrier           String?
+  clientReferenceId String? // Make unique if needed: @unique
+  notes             String?
+
+  devices        Device[]
+  apiKeys        ApiKey[] // Relation for tracking which key created the shipment (optional)
+
+  // --- Link to Location --- 
+  locationId     String   // Make relation REQUIRED
+  location       Location @relation(fields: [locationId], references: [id]) 
+  // ------------------------
+
+  @@index([locationId]) // Index for faster lookup by location
+}
+
+model Device {
+  id          String    @id @default(cuid())
+  serialNumber String    @unique // Ensure serial numbers are unique
+  assetTag    String?   // Added asset tag
+  model       String?   // Track device model
+  isCheckedIn Boolean   @default(false)
+  checkedInAt DateTime?
+
+  shipment    Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade) // Cascade delete devices if shipment is deleted
+  shipmentId  String
+}
+
+enum ShipmentStatus {
+  PENDING     // Created, manifest generated
+  IN_TRANSIT  // Optional status (e.g., if tracking info is added)
+  DELIVERED   // Optional status (e.g., based on tracking)
+  RECEIVING   // Recipient has started check-in (optional, if needed for granular tracking)
+  RECEIVED
+  COMPLETED   // All devices checked in (or discrepancy noted) and signed off
+  CANCELLED
+}
+
+// Model for storing API Keys for external services like Concierge
+model ApiKey {
+  id          String    @id @default(cuid())
+  keyHash     String    @unique // Store a hash of the API key, not the key itself
+  description String?   // e.g., "Concierge Service Key"
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime? // Optional: track usage
+  isActive    Boolean   @default(true)
+
+  // Optional: Link key usage to specific shipments
+  shipments   Shipment[]
+}
+
+// --- Added User model for Credentials Auth ---
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String    // Hashed password
+  name      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+// ------------------------------------------
+
+// TODO: Add User model for Keycloak authentication later
+
+// --- Added Location model ---
+model Location {
+  id              String    @id @default(cuid())
+  // shortId         String    @unique
+  name            String    @unique // Unique name for the location
+  recipientEmails String[]  // List of email addresses for this location
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shipments       Shipment[] // Relation back to Shipments
+}
+// ---------------------------
+
+// --- Added Setting model --- 
+model Setting {
+  key   String @id // e.g., "adminNotifyEmails"
+  value String // Store comma-separated emails or JSON stringified values
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+// ---------------------------
