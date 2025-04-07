@@ -16,9 +16,9 @@ type PublicShipmentDetail = Pick<Shipment, 'id' | 'shortId' | 'senderName' | 'cr
 // --- Public GET Handler (No Auth) --- 
 export async function GET(
     request: Request, // Keep request param
-    { params }: { params: { shortId: string } }
+    { params }: { params: Promise<{ shortId: string }> }
 ) {
-    const shortId = params.shortId?.toUpperCase(); 
+    const shortId = (await params).shortId?.toUpperCase(); 
 
     if (!shortId || shortId.length !== 6) {
         return NextResponse.json({ error: 'Invalid Shipment ID format.' }, { status: 400 });
@@ -62,9 +62,9 @@ export async function GET(
 // --- Public PUT Handler (No Auth) ---
 export async function PUT(
     request: Request,
-    { params }: { params: { shortId: string } }
+    { params }: { params: Promise<{ shortId: string }> }
 ) {
-    const shortId = params.shortId?.toUpperCase();
+    const shortId = (await params).shortId?.toUpperCase();
     if (!shortId || shortId.length !== 6) {
         return NextResponse.json({ error: 'Invalid Shipment ID format.' }, { status: 400 });
     }

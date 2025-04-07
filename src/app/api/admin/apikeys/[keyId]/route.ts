@@ -1,94 +1,93 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
+import { Prisma } from '@prisma/client';
 
 // Define an interface for the route context params
 interface ApiKeyRouteContext {
-  params: {
-    keyId: string;
-  };
+    params: {
+        keyId: string;
+    };
 }
 
 // PATCH: Update an API Key (e.g., toggle isActive)
 export async function PATCH(
-  request: NextRequest,
-  { params }: ApiKeyRouteContext
+    request: Request,
+    { params }: { params: Promise<{ keyId: string }> }
 ): Promise<NextResponse> {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  try {
-    const keyId = params.keyId;
-    const body = await request.json();
-    const { isActive } = body;
-
-    if (typeof isActive !== 'boolean') {
-      return NextResponse.json({ error: 'isActive field (boolean) is required' }, { status: 400 });
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const updatedKey = await prisma.apiKey.update({
-      where: { id: keyId },
-      data: {
-        isActive: isActive,
-      },
-      select: { // Return updated status
-        id: true,
-        isActive: true,
-        description: true,
-      },
-    });
+    try {
+        const keyId = (await params).keyId;
+        const body = await request.json();
+        const { isActive } = body;
 
-    return NextResponse.json(updatedKey);
+        if (typeof isActive !== 'boolean') {
+            return NextResponse.json({ error: 'isActive field (boolean) is required' }, { status: 400 });
+        }
 
-  } catch (error: any) {
-    console.error(`Error updating API key ${params.keyId}:`, error);
-     if (error.code === 'P2025') { // Prisma record not found
-        return NextResponse.json({ error: 'API Key not found' }, { status: 404 });
+        const updatedKey = await prisma.apiKey.update({
+            where: { id: keyId },
+            data: {
+                isActive: isActive,
+            },
+            select: { // Return updated status
+                id: true,
+                isActive: true,
+                description: true,
+            },
+        });
+
+        return NextResponse.json(updatedKey);
+
+    } catch (error: any) {
+        console.error(`Error updating API key ${(await params).keyId}:`, error);
+        if (error.code === 'P2025') { // Prisma record not found
+            return NextResponse.json({ error: 'API Key not found' }, { status: 404 });
+        }
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
 }
 
-// DELETE: Remove an API Key
-export async function DELETE(
-  request: NextRequest,
-  context: ApiKeyRouteContext
-): Promise<NextResponse> {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Destructure keyId from the context params
-  const { keyId } = context.params;
-
-  if (!keyId) {
-    return NextResponse.json({ error: 'API Key ID is required' }, { status: 400 });
-  }
-
-  try {
-    // Find the key first to make sure it exists
-    const existingKey = await prisma.apiKey.findUnique({
-      where: { id: keyId },
-    });
-
-    if (!existingKey) {
-      return NextResponse.json({ error: 'API Key not found' }, { status: 404 });
+// DELETE: Streamlined handler
+export const DELETE = async (
+    request: NextRequest,
+    { params }: { params: Promise<{ keyId: string }> }
+) => {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Update the key to set isActive to false
-    await prisma.apiKey.update({
-      where: { id: keyId },
-      data: { isActive: false },
-    });
+    const keyId = (await params).keyId;
 
-    return NextResponse.json({ message: 'API Key revoked successfully' }, { status: 200 });
+    if (!keyId) {
+        return NextResponse.json({ error: 'API Key ID is required' }, { status: 400 });
+    }
 
-  } catch (error) {
-    console.error(`Error revoking API key ${keyId}:`, error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-} 
+    try {
+        // Attempt to update the key directly
+        await prisma.apiKey.update({
+            where: { id: keyId },
+            data: { isActive: false }, // Set isActive to false instead of deleting
+        });
+
+        // If update succeeds, return success
+        return NextResponse.json({ message: 'API Key revoked successfully' }, { status: 200 });
+
+    } catch (error) {
+        console.error(`Error revoking API key ${keyId}:`, error);
+        
+        // Check if the error is because the record to update was not found
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+            return NextResponse.json({ error: 'API Key not found' }, { status: 404 });
+        }
+        
+        // Handle other potential errors
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}; 

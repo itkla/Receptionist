@@ -97,7 +97,7 @@ export async function generateManifestPdf(shipment: ShipmentWithDevices, receive
 
   drawDetail('Sender Name', shipment.senderName);
   drawDetail('Sender Email', shipment.senderEmail);
-  drawDetail('Destination', shipment.destination);
+  drawDetail('Destination', shipment.location?.name);
   drawDetail('Status', shipment.status);
   // Use the updated type alias which includes trackingId
   if (shipment.trackingId) drawDetail('Tracking ID', shipment.trackingId);

@@ -8,7 +8,7 @@ import { lockDevice } from '@/lib/jamf'; // Import mock Jamf function
 import { sendEmail } from '@/lib/email'; // Import the primary email utility
 // TODO: Import API Key validation logic later
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { NextRequest } from 'next/server';
 import { ShipmentStatus } from "@prisma/client"; // Import enum
 import cuid2 from "@paralleldrive/cuid2"; // Import cuid2 for validation

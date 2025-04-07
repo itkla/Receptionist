@@ -11,8 +11,11 @@ interface RouteParams {
 }
 
 // GET /manifest/[shortId]
-export async function GET(request: Request, { params }: RouteParams) {
-    const { shortId } = params;
+export async function GET(
+    request: Request, 
+    { params }: { params: Promise<{ shortId: string }> }
+) {
+    const shortId = (await params).shortId;
 
     if (!shortId) {
         return new NextResponse('Missing Shipment Short ID', { status: 400 });

@@ -5,10 +5,10 @@ import path from 'path';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } } // Shipment ID from route
+  { params }: { params: Promise<{ id: string }> } // Shipment ID from route
 ) {
   try {
-    const shipmentId = params.id;
+    const shipmentId = (await params).id;
 
     if (!shipmentId) {
       return NextResponse.json({ error: 'Shipment ID is required' }, { status: 400 });

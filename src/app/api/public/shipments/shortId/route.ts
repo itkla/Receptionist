@@ -11,8 +11,11 @@ interface RouteParams {
 
 // GET /api/public/shipments/[shipmentId]
 // Fetches details for a specific shipment, intended for the public receiving page.
-export async function GET(request: Request, { params }: RouteParams) {
-    const { shipmentId } = params;
+export async function GET(
+    request: Request, 
+    { params }: { params: Promise<{ shipmentId: string }> }
+) {
+    const shipmentId = (await params).shipmentId;
 
     if (!shipmentId) {
         return NextResponse.json({ error: 'Shipment ID is required' }, { status: 400 });
@@ -77,8 +80,11 @@ const receiveShipmentSchema = z.object({
 
 // PUT /api/public/shipments/[shipmentId]/receive (or just PUT /api/public/shipments/[shipmentId])
 // Updates the shipment status to RECEIVED and saves recipient info.
-export async function PUT(request: Request, { params }: RouteParams) {
-    const { shipmentId } = params;
+export async function PUT(
+    request: Request, 
+    { params }: { params: Promise<{ shipmentId: string }> }
+) {
+    const shipmentId = (await params).shipmentId;
 
     if (!shipmentId) {
         return NextResponse.json({ error: 'Shipment ID is required' }, { status: 400 });

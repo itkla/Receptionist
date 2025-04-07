@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { ShipmentStatus, Shipment, Device, Location } from "@prisma/client";
 
 // Define the expected structure for the detailed shipment response
@@ -17,7 +17,7 @@ type ShipmentDetailApiResponse = Shipment & {
 // Public GET Handler - No Auth Required
 export async function GET(
     request: Request,
-    { params }: { params: { shortId: string } }
+    { params }: { params: Promise<{ shortId: string }> }
 ) {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -25,7 +25,7 @@ export async function GET(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const shortId = params.shortId?.toUpperCase();
+    const shortId = (await params).shortId?.toUpperCase();
 
     if (!shortId || shortId.length !== 6) {
         return NextResponse.json({ error: 'Invalid Shipment ID format.' }, { status: 400 });
@@ -65,14 +65,14 @@ export async function GET(
 // Public PUT Handler - Needs update later
 export async function PUT(
     request: Request,
-    { params }: { params: { shortId: string } }
+    { params }: { params: Promise<{ shortId: string }> }
 ) {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const shortId = params.shortId?.toUpperCase();
+    const shortId = (await params).shortId?.toUpperCase();
     if (!shortId || shortId.length !== 6) {
         return NextResponse.json({ error: 'Invalid Shipment ID format.' }, { status: 400 });
     }

@@ -4,10 +4,10 @@ import { unlockDevice } from '@/lib/jamf'; // Import mock Jamf function
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } } // Shipment ID from route
+  { params }: { params: Promise<{ id: string }> } // Shipment ID from route
 ) {
   try {
-    const shipmentId = params.id;
+    const shipmentId = (await params).id;
     const body = await request.json();
     const { recipientName, signatureDataUrl } = body;
 

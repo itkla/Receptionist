@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path as needed
+import { authOptions } from "@/lib/auth"; // Adjust path as needed
 import { prisma } from '@/lib/prisma';
 import { ShipmentStatus } from '@prisma/client';
 import { z } from 'zod';
@@ -18,14 +18,17 @@ const verifyShipmentSchema = z.object({
 
 // PUT /api/admin/shipments/[shipmentId]/verify
 // Requires admin session. Updates shipment status to COMPLETED and marks devices as checked in.
-export async function PUT(request: Request, { params }: RouteParams) {
+export async function PUT(
+    request: Request, 
+    { params }: { params: Promise<{ shipmentId: string }> }
+) {
     const session = await getServerSession(authOptions);
     // TODO: Add more robust role checking if necessary
     if (!session || !session.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { shipmentId } = params;
+    const shipmentId = (await params).shipmentId;
     if (!shipmentId) {
         return NextResponse.json({ error: 'Shipment ID is required' }, { status: 400 });
     }

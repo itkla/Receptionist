@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path if needed
+import { authOptions } from "@/lib/auth"; // Adjust path if needed
 import { prisma } from "@/lib/prisma";
 import { z } from 'zod'; // For input validation
 
@@ -32,13 +32,17 @@ const updateRecipientsSchema = z.object({
 
 // PUT /api/admin/locations/[locationId]/recipients
 // Update the recipient email list for a location
-export async function PUT(request: Request, { params }: RouteParams) {
+export async function PUT(
+    request: Request,
+    // { params }: Promise<{ locationId: string }>
+    { params }: { params: Promise<{ locationId: string }> }
+) {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) { // TODO: Add role check
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { locationId } = params;
+    const locationId = (await params).locationId;
     if (!locationId) {
         return NextResponse.json({ error: 'Location ID is required' }, { status: 400 });
     }

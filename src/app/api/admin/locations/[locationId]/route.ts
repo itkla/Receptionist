@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path if needed
+import { authOptions } from "@/lib/auth"; // Adjust path if needed
 import { prisma } from "@/lib/prisma";
 
 interface RouteParams {
@@ -11,13 +11,16 @@ interface RouteParams {
 
 // GET /api/admin/locations/[locationId]
 // Fetch details for a specific location and its associated shipments
-export async function GET(request: Request, { params }: RouteParams) {
+export async function GET(
+    request: Request,
+    { params }: { params: Promise<{ locationId: string }> }
+) {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) { // TODO: Add role check if applicable
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { locationId } = await params;
+    const locationId = (await params).locationId;
 
     if (!locationId) {
         return NextResponse.json({ error: 'Location ID is required' }, { status: 400 });
