@@ -4,6 +4,9 @@ import { ShipmentStatus, Location, Prisma, ApiKey } from "@prisma/client";
 import { z } from 'zod';
 import { generateShortId } from '@/lib/utils'; // Import from utils
 import bcrypt from 'bcryptjs'; // Import bcryptjs
+import { sendEmail } from "@/lib/email"; // Import email utility
+import NewShipmentNotification from "@/emails/NewShipmentNotification"; // Import email component
+import React from 'react'; // Import React
 
 // --- Removed Environment Variable Check ---
 // const PROGRAMMATIC_API_KEY = process.env.PROGRAMMATIC_API_KEY;
@@ -23,7 +26,8 @@ const createShipmentPayloadSchema = z.object({
     carrier: z.string().trim().nullish(),
     trackingNumber: z.string().trim().nullish(),
     notes: z.string().trim().nullish(),
-    devices: z.array(deviceSchema).min(1, { message: "At least one device is required." })
+    devices: z.array(deviceSchema).min(1, { message: "At least one device is required." }),
+    notifyEmails: z.union([z.string(), z.array(z.string())]).nullish(),
 });
 
 // --- Updated API Key Authentication ---
@@ -111,6 +115,12 @@ export async function POST(request: Request) {
     }
     console.log("Payload validated successfully.");
     const validatedData = validation.data;
+    const parsedNotifyEmails: string[] = [];
+    if (typeof validatedData.notifyEmails === 'string') {
+        parsedNotifyEmails.push(...validatedData.notifyEmails.split(',').map(e => e.trim()).filter(e => e !== ''));
+    } else if (Array.isArray(validatedData.notifyEmails)) {
+        parsedNotifyEmails.push(...validatedData.notifyEmails.filter(e => typeof e === 'string' && e.trim() !== ''));
+    }
 
     try {
         // 3. Find Location ID
@@ -192,6 +202,33 @@ export async function POST(request: Request) {
             // This should only happen if maxAttempts was reached due to shortId collisions
             return NextResponse.json({ error: 'Failed to create shipment after multiple attempts due to ID collisions.' }, { status: 500 });
         }
+
+        // --- Send Email Notification (Async, Non-blocking) --- 
+        // Use the populated newShipment object which includes location
+        if (newShipment) { 
+            try {
+                const adminBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"; 
+                const adminEmails = (process.env.ADMIN_NOTIFY_EMAILS || '').split(',').map((e: string) => e.trim()).filter((e: string) => e);
+                const locationEmails = (newShipment.location?.recipientEmails || []).map((e: string) => e.trim()).filter((e: string) => e);
+                
+                const recipientSet = new Set([...adminEmails, ...locationEmails, ...parsedNotifyEmails]);
+                const recipients = Array.from(recipientSet);
+
+                if (recipients.length > 0) {
+                     await sendEmail({
+                         to: recipients,
+                         subject: `New Shipment Created (API): ${newShipment.shortId}`,
+                         react: NewShipmentNotification({ shipment: newShipment, adminBaseUrl: adminBaseUrl }) as React.ReactElement,
+                     });
+                     console.log(`Sent API shipment notification for ${newShipment.shortId} to:`, recipients);
+                } else {
+                    console.warn(`No recipients found for API shipment notification ${newShipment.shortId}`);
+                }
+            } catch (emailError: any) {
+                 console.error(`Failed to send API shipment notification for ${newShipment.shortId}:`, emailError);
+            }
+        } // End if(newShipment)
+        // --- End Email Notification --- 
 
         // 5. Return Response (if successful)
         console.log("Transaction completed successfully after retries (if any).");

@@ -35,9 +35,9 @@ export async function GET(
         const shipment = await prisma.shipment.findUnique({
             where: { shortId: shortId },
             include: {
-                devices: true,   // Include all device fields
-                location: true, // Include all location fields
-                // Ensure all needed fields are included here based on ShipmentDetailApiResponse
+                devices: true,
+                location: true,
+                // No need to explicitly select notifyEmails, include covers it
             }
         });
 
@@ -79,17 +79,24 @@ export async function PUT(
 
     try {
         const body = await request.json();
-        // Destructure potentially including adminCheckedSerials
-        const { senderName, senderEmail, status, trackingNumber, adminCheckedSerials } = body;
+        // Destructure notifyEmails from body
+        const { senderName, senderEmail, status, trackingNumber, adminCheckedSerials, notifyEmails } = body;
 
-        // Basic validation (add check for adminCheckedSerials if needed)
-        if (typeof senderName !== 'string' || typeof senderEmail !== 'string' || !Object.values(ShipmentStatus).includes(status) || (adminCheckedSerials && !Array.isArray(adminCheckedSerials))) {
+        // Basic validation (add notifyEmails validation)
+        if (
+            typeof senderName !== 'string' || 
+            typeof senderEmail !== 'string' || 
+            !Object.values(ShipmentStatus).includes(status) || 
+            (adminCheckedSerials && !Array.isArray(adminCheckedSerials)) ||
+            // Validate notifyEmails: must be an array of strings if present
+            (notifyEmails !== undefined && notifyEmails !== null && !Array.isArray(notifyEmails)) || 
+            (Array.isArray(notifyEmails) && !notifyEmails.every(e => typeof e === 'string'))
+           ) {
             return NextResponse.json({ error: 'Invalid input data.' }, { status: 400 });
         }
 
-        const now = new Date(); // Capture current time for potential check-ins
+        const now = new Date();
 
-        // Use a transaction for atomicity
         const updatedShipment = await prisma.$transaction(async (tx) => {
             // Find existing shipment first (needed for status checks and potentially ID)
             const existingShipment = await tx.shipment.findUnique({
@@ -109,7 +116,7 @@ export async function PUT(
                  }
             }
 
-            // Update the main shipment record (prepare promise)
+            // Update the main shipment record
             const shipmentUpdatePromise = tx.shipment.update({
                 where: { shortId: shortId }, 
                 data: {
@@ -117,6 +124,9 @@ export async function PUT(
                     senderEmail: senderEmail.trim(),
                     status: status,
                     trackingNumber: trackingNumber?.trim() || null,
+                    // Add notifyEmails to the update data
+                    // Ensure it's an array, default to empty array if null/undefined
+                    notifyEmails: Array.isArray(notifyEmails) ? notifyEmails.filter(e => e.trim() !== '') : [], 
                 },
                  include: { 
                      devices: true,
@@ -146,7 +156,6 @@ export async function PUT(
             const updatedShipmentResult = await shipmentUpdatePromise;
             return updatedShipmentResult;
         });
-
 
         return NextResponse.json(updatedShipment as ShipmentDetailApiResponse);
 

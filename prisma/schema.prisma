@@ -14,6 +14,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model EmailLog {
+  id          String    @id @default(cuid())
+  shipmentId  String?   // Link to shipment if applicable
+  emailType   String    // e.g., 'NEW_SHIPMENT', 'RECEIVED'
+  recipient   String    // Store the primary 'to' address or a summary
+  subject     String
+  htmlContent String    @db.Text // Store the rendered HTML
+  sentAt      DateTime  @default(now())
+
+  shipment    Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull) // SetNull on delete to keep logs
+
+  @@index([shipmentId])
+  @@index([emailType])
+}
+
 model Shipment {
   id             String    @id @default(cuid())
   shortId        String    @unique // 6-character unique ID
@@ -35,8 +50,11 @@ model Shipment {
   clientReferenceId String? // Make unique if needed: @unique
   notes             String?
 
+  notifyEmails   String[]  @default([]) // Add this field for specific notification emails
+
   devices        Device[]
   apiKeys        ApiKey[] // Relation for tracking which key created the shipment (optional)
+  emailLogs      EmailLog[]
 
   // --- Link to Location --- 
   locationId     String   // Make relation REQUIRED

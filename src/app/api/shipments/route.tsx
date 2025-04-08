@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { senderName, senderEmail, devices, locationValue, trackingNumber } = body;
+    const { senderName, senderEmail, devices, locationValue, trackingNumber, notifyEmails } = body;
 
     // Validation
     if (!senderName || !senderEmail || !locationValue || !Array.isArray(devices) || devices.length === 0) {
@@ -58,6 +58,18 @@ export async function POST(request: Request) {
     if (!devices.every((d: any) => d.serialNumber)) {
         return NextResponse.json({ error: 'Each device must have a serialNumber' }, { status: 400 });
     }
+
+    // Optional: Add basic validation for notifyEmails if provided
+    if (notifyEmails && !Array.isArray(notifyEmails) && typeof notifyEmails !== 'string') {
+        return NextResponse.json({ error: 'notifyEmails must be an array of strings or a single string.' }, { status: 400 });
+    }
+    let parsedNotifyEmails: string[] = [];
+    if (typeof notifyEmails === 'string') {
+        parsedNotifyEmails = notifyEmails.split(',').map(e => e.trim()).filter(e => e !== '');
+    } else if (Array.isArray(notifyEmails)) {
+        parsedNotifyEmails = notifyEmails.filter(e => typeof e === 'string' && e.trim() !== '');
+    }
+    // TODO: Add stricter email format validation if needed
 
     // Determine if locationValue is an ID or a new name
     const isPotentialId = cuid2.isCuid(locationValue);
@@ -157,7 +169,9 @@ export async function POST(request: Request) {
         const adminBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"; 
         const adminEmails = (process.env.ADMIN_NOTIFY_EMAILS || '').split(',').map((e: string) => e.trim()).filter((e: string) => e);
         const locationEmails = (newShipment.location?.recipientEmails || []).map((e: string) => e.trim()).filter((e: string) => e);
-        const recipientSet = new Set([...adminEmails, ...locationEmails]);
+        
+        // Combine all recipient emails, including the new optional ones
+        const recipientSet = new Set([...adminEmails, ...locationEmails, ...parsedNotifyEmails]);
         const recipients = Array.from(recipientSet);
 
         if (recipients.length > 0) {

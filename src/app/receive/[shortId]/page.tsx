@@ -9,12 +9,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Toaster as SonnerToaster } from "sonner";
-import { IconLoader2, IconAlertCircle, IconDeviceDesktop, IconSignature, IconTrash, IconDeviceLaptop, IconScan, IconX } from '@tabler/icons-react';
+import { IconLoader2, IconAlertCircle, IconDeviceDesktop, IconSignature, IconTrash, IconDeviceLaptop, IconScan, IconX, IconArrowUp } from '@tabler/icons-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { BrowserMultiFormatReader, Result, NotFoundException, ChecksumException, FormatException } from '@zxing/library';
+import { motion, useAnimation } from 'framer-motion';
 
 // --- Types --- Using Prisma types directly where possible
 import { Device as PrismaDevice, Shipment as PrismaShipment, ShipmentStatus } from '@prisma/client';
@@ -221,6 +223,7 @@ export default function ShipmentReceivePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const signaturePadRef = useRef<SignatureCanvas>(null);
 
   // State for received items
@@ -244,6 +247,12 @@ export default function ShipmentReceivePage() {
      assetTag: '',
      model: ''
   });
+
+  const [isConfirming, setIsConfirming] = useState(false); // State for swipe confirmation
+
+  const formControls = useAnimation(); // Animation controls for the form
+  const swipeTabControls = useAnimation(); // Animation controls for the swipe tab
+  const confirmScreenControls = useAnimation(); // Animation controls for the confirm screen
 
   // Fetch data
   useEffect(() => {
@@ -401,72 +410,91 @@ export default function ShipmentReceivePage() {
     setIsSigned(false); // Reset signed state on clear
   };
 
-  // --- Final Form Submission --- 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    // Check ref existence before isEmpty
-    if (!recipientName.trim() || !signaturePadRef.current || signaturePadRef.current.isEmpty()) {
-      toast.error("Missing Information", { description: "Please enter your name and provide a signature." });
+  // --- Form Submission Logic ---
+  const handleActualSubmit = async () => {
+    console.log("Actual submission confirmed.");
+    if (!shortId) {
+      toast.error("Shipment ID is missing.");
+      return;
+    }
+
+    const signatureData = signaturePadRef.current?.toDataURL('image/png');
+
+    if (signaturePadRef.current?.isEmpty() || !signatureData) {
+      toast.error("Signature is required.");
+      return;
+    }
+    if (!recipientName.trim()) {
+      toast.error("Recipient name is required.");
       return;
     }
     
-    // Check ref existence before toDataURL
-    const signatureDataUrl = signaturePadRef.current.toDataURL('image/png');
-    if (!signatureDataUrl) {
-        toast.error("Signature Error", { description: "Could not capture signature data." });
-        return;
-    }
-
     setIsSubmitting(true);
-    const toastId = 'submit-receipt';
-    toast.loading("Submitting receipt...", { id: toastId });
+    setError(null);
 
     try {
-      // Update payload to send extraDevicesList (excluding client-side ID)
       const payload = {
-          recipientName: recipientName.trim(),
-          signature: signatureDataUrl,
-          receivedSerials: Array.from(receivedSerials),
-          // Map extra devices to exclude temporary client ID
-          extraDevices: extraDevicesList.map(({ id, ...rest }) => rest),
+        recipientName: recipientName.trim(),
+        signature: signatureData,
+        receivedSerials: Array.from(receivedSerials),
+        extraDevices: extraDevicesList.map(({ id, ...rest }) => rest) // Remove temporary client ID
       };
-      
-      console.log("Submitting Payload:", payload);
-      
-      // Backend PUT needs update to handle `extraDevices` array of objects
-      const response = await fetch(`/api/public/shipments/${shortId!.toUpperCase()}`, {
+
+      console.log("Submitting payload:", payload);
+
+      const response = await fetch(`/api/public/shipments/${shortId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(payload),
-        });
+      });
 
-        const result = await response.json();
         if (!response.ok) {
-            throw new Error(result.error || `Failed to submit receipt (HTTP ${response.status})`);
-        }
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
 
-      toast.success("Receipt Submitted!", { description: "Shipment marked as received.", id: toastId });
-      // Instead of updating local shipment state, set the success flag
-      setSubmissionSuccess(true); 
+      const result = await response.json();
+      console.log("Submission successful:", result);
+      toast.success("Receipt submitted successfully!");
+      setSubmissionSuccess(true); // Mark as submitted
+      // Optionally reset parts of the form or disable further edits
 
     } catch (err: any) {
-        console.error("Error submitting receipt:", err);
-      toast.error("Submission Failed", { description: err.message, id: toastId });
+      console.error("Submission failed:", err);
+      setError(err.message || "Failed to submit receipt.");
+      toast.error(err.message || "Failed to submit receipt.");
     } finally {
         setIsSubmitting(false);
     }
   };
 
-  // Calculate disabled state and log values for debugging
-  const isButtonDisabled = isSubmitting || !recipientName.trim() || !isSigned; // Use !isSigned
+  // --- Animation Trigger --- 
+  useEffect(() => {
+    if (isConfirming) {
+        formControls.start({ y: -100, opacity: 0.8 }); // Move form up slightly and fade
+        swipeTabControls.start({ y: 100, opacity: 0 }); // Hide swipe tab
+        confirmScreenControls.start({ y: 0, opacity: 1 }); // Show confirm screen
+    } else {
+        formControls.start({ y: 0, opacity: 1 }); // Move form back
+        swipeTabControls.start({ y: 0, opacity: 1 }); // Show swipe tab
+        confirmScreenControls.start({ y: -50, opacity: 0 }); // Hide confirm screen (start below)
+    }
+  }, [isConfirming, formControls, swipeTabControls, confirmScreenControls]);
 
-  console.log("Submit Button Check:", {
-    isSubmitting,
-    recipientName: recipientName.trim(),
-    isSigned, // Log isSigned instead
-    signaturePadRefCurrent: !!signaturePadRef.current,
-    finalDisabledState: isButtonDisabled,
-  });
+  // --- Drag Handler for Swipe Tab --- 
+  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number; y: number; }; velocity: { x: number; y: number; }; }) => {
+      const swipeThreshold = -50; // Pixels dragged up
+      const velocityThreshold = -300; // Velocity upwards
+      
+      if (info.offset.y < swipeThreshold || info.velocity.y < velocityThreshold) {
+          // Swiped up sufficiently
+          setIsConfirming(true);
+      } else {
+          // Didn't swipe enough, snap back (handled by animation effect)
+      }
+  };
 
   // --- Render Logic --- 
   if (isLoading) {
@@ -510,9 +538,11 @@ export default function ShipmentReceivePage() {
         );
     }
 
-  // Main receiving form (Only shown if not loading, no error, shipment exists, not just submitted, and not already received)
+  // Core validation for enabling swipe/submit
+  const canSubmit = !isSubmitting && recipientName.trim() && isSigned && !submissionSuccess;
+
   return (
-    <main className="container mx-auto max-w-3xl p-4 md:p-8 min-h-screen flex flex-col">
+    <main className="container mx-auto max-w-3xl p-4 md:p-8 flex flex-col" style={{ minHeight: 'calc(100vh - 4rem)' }}> { /* Adjust minHeight if needed */ }
        {/* --- Scanner Modal --- */}
        <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
           <DialogContent>
@@ -564,149 +594,177 @@ Enter details for a device received that was not on the original manifest.
        </Dialog>
        {/* ----------------------------- */}
 
-      <Card className="flex-grow flex flex-col">
-        <CardHeader>
-          <CardTitle className="text-2xl">Confirm Shipment Receipt</CardTitle>
-          <CardDescription>
-            Verify devices received for Shipment ID: <span className="font-mono font-semibold">{shipment.shortId}</span> from {shipment.senderName}.
-          </CardDescription>
-        </CardHeader>
-        
-        <form onSubmit={handleSubmit} className="flex-grow flex flex-col space-y-6 p-6">
+      {/* Wrap Card content in motion.div for animation */}
+      <motion.div 
+        animate={formControls} 
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="flex-grow flex flex-col" // Make this div grow
+      >
+        <Card className="flex-grow flex flex-col"> { /* Ensure Card fills space */ }
+          <CardHeader>
+            <CardTitle className="text-2xl">Confirm Shipment Receipt</CardTitle>
+            <CardDescription>
+              Verify devices received for Shipment ID: <span className="font-mono font-semibold">{shipment.shortId}</span> from {shipment.senderName}.
+            </CardDescription>
+          </CardHeader>
           
-           {/* Devices Section */}
-           <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold flex items-center">
-                    <IconDeviceLaptop className="mr-2 h-5 w-5 text-muted-foreground"/> Manifested Devices ({shipment.devices?.length ?? 0})
-                    </h3>
-                     {/* Re-add Scan Button */} 
-                     <div className="flex items-center gap-2">
-                         <Button type="button" variant="outline" size="sm" onClick={() => setIsScannerOpen(true)} disabled={isSubmitting}>
-                              <IconScan className="mr-2 h-4 w-4"/> Scan Device
-                         </Button>
-                         <Button type="button" variant="secondary" size="sm" onClick={() => setIsExtraDeviceModalOpen(true)} disabled={isSubmitting}>
-                              <IconDeviceDesktop className="mr-2 h-4 w-4"/> Add Extra Device
-                         </Button>
-            </div>
-                </div>
-                 <p className="text-sm text-muted-foreground">Scan devices or manually check the box for each item received.</p>
-                <ScrollArea className="h-72 w-full rounded-md border p-4">
-                   {(shipment.devices?.length ?? 0) === 0 ? ( // Use optional chaining
-                        <p className="text-sm text-center text-muted-foreground py-4">No devices listed on manifest.</p>
-                   ) : (
-                       shipment.devices.map((device) => {
-                           // Determine if received (use full serial for check)
-                           const isReceived = receivedSerials.has(device.serialNumber);
-                           return (
-                                <div key={device.id} className="flex items-center space-x-3 mb-3 border-b pb-3 last:border-b-0 last:pb-0 last:mb-0">
-                                <Checkbox
-                                    id={`device-${device.id}`}
-                                    // Checked state depends on full serial being in the Set
-                                    checked={isReceived}
-                                    // Toggle uses the full serial
-                                    onCheckedChange={() => handleDeviceToggle(device.serialNumber)}
-                                    aria-labelledby={`label-${device.id}`}
-                                    disabled={isSubmitting}
-                                />
-                                <Label
-                                    htmlFor={`device-${device.id}`}
-                                    id={`label-${device.id}`}
-                                    className="flex-grow grid grid-cols-3 gap-2 text-sm font-normal cursor-pointer"
-                                >
-                                    {/* Display full serial if received, otherwise obfuscated */}
-                                    <span className="font-mono col-span-1" title={device.serialNumber}>
-                                        {isReceived ? device.serialNumber : obfuscateSerial(device.serialNumber)}
-                                    </span>
-                                    <span className="text-muted-foreground col-span-1">{device.assetTag || '-'}</span>
-                                    <span className="text-muted-foreground col-span-1">{device.model || '-'}</span>
-                                </Label>
-                            </div>
-                           );
-                       })
-                   )}
-                </ScrollArea>
-          </div>
-
-            {/* Extra Devices Section - Remove old input/list */}
-            {/* Display Added Extra Devices */}
-            {extraDevicesList.length > 0 && (
-                 <div className="space-y-3">
-                    <h3 className="text-lg font-semibold flex items-center">
-                        <IconDeviceDesktop className="mr-2 h-5 w-5 text-muted-foreground"/> Added Extra Devices ({extraDevicesList.length})
-            </h3>
-                    <div className="border rounded p-3 space-y-2">
-                        {extraDevicesList.map(device => (
-                             <div key={device.id} className="flex items-center justify-between text-sm">
-                                <div className="flex flex-col">
-                                     <span className="font-mono" title={device.serialNumber}>{obfuscateSerial(device.serialNumber)}</span>
-                                     <span className="text-xs text-muted-foreground">
-                                         {device.assetTag || '-'} / {device.model || '-'}
-                                     </span>
-                                </div>
-                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveExtraDevice(device.id)} disabled={isSubmitting} title="Remove extra device">
-                                     <IconTrash className="h-4 w-4"/>
-                                </Button>
-                             </div>
-                        ))}
-            </div>
-          </div>
-            )}
-
-           <Separator />
-
-           {/* Recipient Info Section */}
-           <div className="space-y-4">
-                 <h3 className="text-lg font-semibold">Recipient Information</h3>
-             <div>
-                    <Label htmlFor="recipientName">Your Name</Label>
-                    <Input id="recipientName" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} required disabled={isSubmitting} className="mt-1"/>
+          <div className="flex-grow flex flex-col space-y-6 p-6"> { /* Main form content area */ }
+            
+            {/* Devices Section */}
+            <div className="space-y-4">
+                 <div className="flex justify-between items-center">
+                     <h3 className="text-lg font-semibold flex items-center">
+                     <IconDeviceLaptop className="mr-2 h-5 w-5 text-muted-foreground"/> Manifested Devices ({shipment.devices?.length ?? 0})
+                     </h3>
+                      {/* Re-add Scan Button */} 
+                      <div className="flex items-center gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setIsScannerOpen(true)} disabled={isSubmitting}>
+                               <IconScan className="mr-2 h-4 w-4"/> Scan Device
+                          </Button>
+                          <Button type="button" variant="secondary" size="sm" onClick={() => setIsExtraDeviceModalOpen(true)} disabled={isSubmitting}>
+                               <IconDeviceDesktop className="mr-2 h-4 w-4"/> Add Extra Device
+                          </Button>
              </div>
-                 <div className="space-y-1">
-                    <Label>Recipient Signature</Label>
-                    <div className="relative rounded-md border border-input bg-background p-2 touch-none">
-                     <SignatureCanvas
-                        ref={signaturePadRef}
-                        penColor='black'
-                            canvasProps={{className: 'w-full h-48'}}
-                            onEnd={() => setIsSigned(true)} 
-                        />
-                        {/* Clear Button */}
-                        <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            className="absolute top-1 right-1 h-6 w-6"
-                            onClick={handleClearSignature}
-                            title="Clear Signature"
-                            disabled={isSubmitting}
-                        >
-                            <IconX className="h-4 w-4 text-muted-foreground"/>
-                        </Button>
-                    </div>
                  </div>
-                </div>
+                  <p className="text-sm text-muted-foreground">Scan devices or manually check the box for each item received.</p>
+                 <ScrollArea className="h-72 w-full rounded-md border p-4">
+                    {(shipment.devices?.length ?? 0) === 0 ? ( // Use optional chaining
+                         <p className="text-sm text-center text-muted-foreground py-4">No devices listed on manifest.</p>
+                    ) : (
+                        shipment.devices.map((device) => {
+                            // Determine if received (use full serial for check)
+                            const isReceived = receivedSerials.has(device.serialNumber);
+                            return (
+                                 <div key={device.id} className="flex items-center space-x-3 mb-3 border-b pb-3 last:border-b-0 last:pb-0 last:mb-0">
+                                 <Checkbox
+                                     id={`device-${device.id}`}
+                                     // Checked state depends on full serial being in the Set
+                                     checked={isReceived}
+                                     // Toggle uses the full serial
+                                     onCheckedChange={() => handleDeviceToggle(device.serialNumber)}
+                                     aria-labelledby={`label-${device.id}`}
+                                     disabled={isSubmitting}
+                                 />
+                                 <Label
+                                     htmlFor={`device-${device.id}`}
+                                     id={`label-${device.id}`}
+                                     className="flex-grow grid grid-cols-3 gap-2 text-sm font-normal cursor-pointer"
+                                 >
+                                     {/* Display full serial if received, otherwise obfuscated */}
+                                     <span className="font-mono col-span-1" title={device.serialNumber}>
+                                         {isReceived ? device.serialNumber : obfuscateSerial(device.serialNumber)}
+                                     </span>
+                                     <span className="text-muted-foreground col-span-1">{device.assetTag || '-'}</span>
+                                     <span className="text-muted-foreground col-span-1">{device.model || '-'}</span>
+                                 </Label>
+                             </div>
+                            );
+                        })
+                    )}
+                 </ScrollArea>
+           </div>
 
-            <CardFooter className="p-0 pt-6 mt-auto"> {/* Push footer to bottom */}
-                 <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={isButtonDisabled} // Use calculated state
-                    title={
-                        // Update title logic to use isSigned
-                        !recipientName.trim() 
-                            ? "Please enter recipient name." 
-                            : (!isSigned 
-                                ? "Please provide signature." 
-                                : "Submit Receipt")
-                    }
-                >
-                   {isSubmitting ? <IconLoader2 className="animate-spin mr-2"/> : null}
-                   Confirm and Submit Receipt
-                </Button>
-            </CardFooter>
-          </form>
-      </Card>
+             {/* Extra Devices Section - Remove old input/list */}
+             {/* Display Added Extra Devices */}
+             {extraDevicesList.length > 0 && (
+                  <div className="space-y-3">
+                     <h3 className="text-lg font-semibold flex items-center">
+                         <IconDeviceDesktop className="mr-2 h-5 w-5 text-muted-foreground"/> Added Extra Devices ({extraDevicesList.length})
+             </h3>
+                     <div className="border rounded p-3 space-y-2">
+                         {extraDevicesList.map(device => (
+                              <div key={device.id} className="flex items-center justify-between text-sm">
+                                 <div className="flex flex-col">
+                                      <span className="font-mono" title={device.serialNumber}>{obfuscateSerial(device.serialNumber)}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                          {device.assetTag || '-'} / {device.model || '-'}
+                                      </span>
+                                 </div>
+                                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveExtraDevice(device.id)} disabled={isSubmitting} title="Remove extra device">
+                                      <IconTrash className="h-4 w-4"/>
+                                 </Button>
+                              </div>
+                         ))}
+             </div>
+           </div>
+             )}
+
+            <Separator />
+
+            {/* Recipient Info Section */}
+            <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Recipient Information</h3>
+              <div>
+                     <Label htmlFor="recipientName">Your Name</Label>
+                     <Input id="recipientName" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} required disabled={isSubmitting || submissionSuccess} className="mt-1"/>
+              </div>
+                  <div className="space-y-1">
+                     <Label>Recipient Signature</Label>
+                     <div className="relative rounded-md border border-input bg-background p-2 touch-none">
+                      <SignatureCanvas
+                         ref={signaturePadRef}
+                         penColor='black'
+                             canvasProps={{className: 'w-full h-48'}}
+                             onEnd={() => setIsSigned(true)} 
+                         />
+                         {/* Clear Button */}
+                         <Button 
+                             type="button" 
+                             variant="ghost" 
+                             size="icon" 
+                             className="absolute top-1 right-1 h-6 w-6"
+                             onClick={handleClearSignature}
+                             title="Clear Signature"
+                             disabled={isSubmitting || submissionSuccess}
+                         >
+                             <IconX className="h-4 w-4 text-muted-foreground"/>
+                         </Button>
+                         {/* Prevent interaction after success / during submit */}
+                         {(isSubmitting || submissionSuccess) && <div className="absolute inset-0 bg-gray-200/50 cursor-not-allowed"></div>}
+                     </div>
+                 </div>
+             </div>
+
+          </div> { /* End form content area */ }
+        </Card>
+      </motion.div> { /* End animated form div */}
+
+      {/* --- Swipe and Confirmation Area --- */}
+      <div className="relative h-24 mt-4 flex-shrink-0"> { /* Fixed height container for swipe/confirm */ }
+        {/* Swipe Tab */}
+        <motion.div 
+          className={`absolute inset-x-0 bottom-0 bg-gray-900 text-white p-4 rounded-b-md text-center ${canSubmit ? 'cursor-grab' : 'cursor-not-allowed opacity-50'}`}
+          drag="y"
+          dragConstraints={{ top: -150, bottom: 0 }}
+          dragElastic={0.1}
+          onDragEnd={handleDragEnd}
+          animate={swipeTabControls}
+          initial={{ y: 0, opacity: 1 }}
+          style={{ touchAction: canSubmit ? 'pan-y' : 'none' }} // Only allow pan when enabled
+        >
+            <IconArrowUp className="h-5 w-5 mx-auto mb-1" />
+            Swipe up to Submit
+        </motion.div>
+
+        {/* Confirmation Screen */}
+        <motion.div 
+          className="absolute inset-0 bg-white dark:bg-gray-800 p-4 rounded-md shadow-lg flex flex-col items-center justify-center text-center border border-primary"
+          initial={{ y: 50, opacity: 0 }}
+          animate={confirmScreenControls}
+          transition={{ duration: 0.3 }}
+        >
+          <p className="font-semibold mb-4">Ready to Submit Receipt?</p>
+          <div className="flex gap-4">
+            <Button variant="outline" onClick={() => setIsConfirming(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleActualSubmit} disabled={!canSubmit || isSubmitting}>
+              {isSubmitting ? <><IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</> : 'Confirm & Submit'}
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+
     </main>
   );
 } 

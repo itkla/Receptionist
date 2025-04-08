@@ -1,10 +1,11 @@
 import { PDFDocument, StandardFonts, rgb, degrees, PageSizes } from 'pdf-lib';
-import { Shipment, Device, Prisma } from '@prisma/client';
+import { Shipment, Device, Location, Prisma } from '@prisma/client';
 import QRCode from 'qrcode';
 
 // Update type alias to match current schema
 type ShipmentWithDevices = Shipment & {
     devices: Device[]; // Device now includes assetTag from schema
+    location: Location; // Add the Location type
     // Explicitly include fields added to Shipment
     trackingId?: string | null;
     recipientEmail?: string | null;

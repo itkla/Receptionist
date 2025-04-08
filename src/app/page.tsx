@@ -87,6 +87,7 @@ type ShipmentDetail = PrismaShipment & {
     recipientSignature?: string | null;
     receivedAt?: Date | null;
     manifestUrl?: string | null;
+    notifyEmails?: string[];
 };
 
 // Form data state type
@@ -95,6 +96,7 @@ interface ShipmentFormData {
     senderEmail: string;
     status: ShipmentStatus;
     trackingNumber: string | null;
+    notifyEmails: string;
     // Add other editable fields here if needed (e.g., trackingId)
 }
 
@@ -119,7 +121,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
     const [error, setError] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [formData, setFormData] = useState<ShipmentFormData>({ senderName: '', senderEmail: '', status: ShipmentStatus.PENDING, trackingNumber: null });
+    const [formData, setFormData] = useState<ShipmentFormData>({ senderName: '', senderEmail: '', status: ShipmentStatus.PENDING, trackingNumber: null, notifyEmails: '' });
     const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
 
@@ -133,7 +135,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                  setIsLoading(false);
                  setIsEditing(false);
                  setIsSaving(false);
-                 setFormData({ senderName: '', senderEmail: '', status: ShipmentStatus.PENDING, trackingNumber: null });
+                 setFormData({ senderName: '', senderEmail: '', status: ShipmentStatus.PENDING, trackingNumber: null, notifyEmails: '' });
                  setQrCodeDataUrl(null); // Reset QR code state
             }, 300);
             return () => clearTimeout(timer);
@@ -161,6 +163,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                             senderEmail: data.senderEmail || '',
                             status: data.status as ShipmentStatus || ShipmentStatus.PENDING,
                             trackingNumber: data.trackingNumber || null,
+                            notifyEmails: (data.notifyEmails || []).join(', '),
                         });
 
                         // --- Generate QR Code Data URL --- 
@@ -208,7 +211,13 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
     };
     const handleEditToggle = () => {
         if (isEditing && shipment) {
-             setFormData({ senderName: shipment.senderName || '', senderEmail: shipment.senderEmail || '', status: shipment.status || ShipmentStatus.PENDING, trackingNumber: shipment.trackingNumber || null });
+             setFormData({
+                senderName: shipment.senderName || '',
+                senderEmail: shipment.senderEmail || '',
+                status: shipment.status || ShipmentStatus.PENDING,
+                trackingNumber: shipment.trackingNumber || null,
+                notifyEmails: (shipment.notifyEmails || []).join(', '),
+             });
         }
         setIsEditing(!isEditing);
     };
@@ -217,14 +226,29 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
         const toastId = `save-shipment-${shortId}`;
         toast.loading("Saving changes...", { id: toastId });
         try {
-            const response = await fetch(`/api/shipments/${shortId!.toUpperCase()}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+            // Parse the comma-separated string back into an array
+            const emailsToSend = formData.notifyEmails.split(',')
+                                              .map(e => e.trim())
+                                              .filter(e => e !== ''); // Remove empty strings
+
+            const payload = {
+                ...formData,
+                notifyEmails: emailsToSend // Send the parsed array
+            };
+
+            const response = await fetch(`/api/shipments/${shortId!.toUpperCase()}`, { 
+                method: 'PUT', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) // Send payload including parsed emails
+            });
             const result = await response.json();
             if (!response.ok) { throw new Error(result.error || `Failed to save changes (HTTP ${response.status})`); }
-            // Update state in modal (optional, as parent list will refetch)
+            
+            // Update local state with the full response (which now includes notifyEmails array)
             setShipment(result as ShipmentDetail);
             setIsEditing(false);
             toast.success("Shipment updated successfully!", { id: toastId });
-            onShipmentUpdate(); // Call the callback to refresh dashboard
+            onShipmentUpdate(); // Refresh dashboard list
         } catch (err: any) {
             console.error("Error saving shipment:", err);
             toast.error("Save Failed", { description: err.message, id: toastId });
@@ -279,6 +303,17 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                                           <Input id="modal-trackingNumber" name="trackingNumber" value={formData.trackingNumber ?? ''} onChange={handleInputChange} placeholder="Optional carrier tracking #" disabled={isSaving}/>
                                      </div>
                                 </div>
+                                <div className="space-y-1">
+                                    <Label htmlFor="modal-notifyEmails">Notification Emails (Optional)</Label>
+                                    <Input 
+                                        id="modal-notifyEmails"
+                                        name="notifyEmails"
+                                        value={formData.notifyEmails}
+                                        onChange={handleInputChange}
+                                        placeholder="Comma-separated emails"
+                                        disabled={isSaving}
+                                    />
+                                </div>
                                 <div className="flex justify-end pt-4"><Button onClick={handleSave} disabled={isSaving}>{isSaving?<IconLoader2 className="animate-spin mr-2 h-4"/>:'Save Changes'}</Button></div>
                             </div>
                         ) : (
@@ -305,6 +340,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                                      )}
                                 </div>
                                 {shipment.trackingNumber && <div><strong className="font-medium">Tracking #:</strong> {shipment.trackingNumber}</div>}
+                                <div className="md:col-span-2"><strong className="font-medium">Notify Emails:</strong> {(shipment.notifyEmails && shipment.notifyEmails.length > 0) ? shipment.notifyEmails.join(', ') : <span className="italic text-muted-foreground/50">None</span>}</div>
                             </div>
                         )}
                     </CardContent>
@@ -979,12 +1015,13 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
   const [senderName, setSenderName] = useState('');
   const [senderEmail, setSenderEmail] = useState('');
   const [devices, setDevices] = useState<DeviceInput[]>([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
-  const [isLoading, setIsLoading] = useState(false);
   const [locationInputValue, setLocationInputValue] = useState<string>('');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [notifyEmails, setNotifyEmails] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [locations, setLocations] = useState<PrismaLocation[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [isLocationPopoverOpen, setIsLocationPopoverOpen] = useState(false);
-  const [trackingNumber, setTrackingNumber] = useState('');
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -1057,9 +1094,10 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         body: JSON.stringify({
             senderName: senderName.trim(),
             senderEmail: senderEmail.trim(),
-          locationValue: locationInputValue.trim(),
-          trackingNumber: trackingNumber.trim() || null,
-          devices: validDevices,
+            locationValue: locationInputValue.trim(),
+            trackingNumber: trackingNumber.trim() || null,
+            notifyEmails: notifyEmails.trim() || null,
+            devices: validDevices,
         }),
       });
 
@@ -1070,8 +1108,7 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
       }
 
       toast.success("Shipment Created Successfully!", {
-        description: `Shipment ID: ${data.shipmentId}`,
-        action: data.manifestUrl ? { label: "View Manifest", onClick: () => window.open(data.manifestUrl, '_blank') } : undefined,
+        description: `Shipment ID: ${data.id}`,
       });
 
       setSenderName('');
@@ -1079,6 +1116,7 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
       setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
       setLocationInputValue('');
       setTrackingNumber('');
+      setNotifyEmails('');
 
       if (onSuccess) {
         onSuccess();
@@ -1195,6 +1233,17 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
             value={trackingNumber}
             onChange={(e) => setTrackingNumber(e.target.value)}
             placeholder="e.g., 1Z999AA10123456784"
+            disabled={isLoading}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="modal-notify-emails">Notify Emails (Optional)</Label>
+        <Input 
+            id="modal-notify-emails"
+            value={notifyEmails}
+            onChange={(e) => setNotifyEmails(e.target.value)}
+            placeholder="Comma-separated emails, e.g., user@example.com, team@example.com"
             disabled={isLoading}
         />
       </div>
