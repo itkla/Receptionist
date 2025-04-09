@@ -14,7 +14,8 @@ import {
   IconLoader2,
   IconAlertCircle,
   IconFileDescription,
-  IconSignature, // For signature status
+  IconSignature,
+  IconUser, // For signature status
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { motion } from "motion/react";
@@ -230,6 +231,7 @@ export default function DestinationDetailPage() {
     { label: "Shipments", href: "/", icon: <IconPackage className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
     { label: "Destinations", href: "/locations", icon: <IconLocation className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
     { label: "Settings", href: "/settings", icon: <IconSettings className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
+    { label: "Users", href: "/users", icon: <IconUser className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
     { label: "Logout", href: "/api/auth/signout", icon: <IconArrowLeft className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
   ];
 

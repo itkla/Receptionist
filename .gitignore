@@ -45,3 +45,5 @@ next-env.d.ts
 
 # Generated manifests
 public/uploads
+
+certificates

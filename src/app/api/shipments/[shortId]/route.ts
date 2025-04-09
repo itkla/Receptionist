@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { ShipmentStatus, Shipment, Device, Location } from "@prisma/client";
+import { Prisma } from '@prisma/client'; // Import Prisma for error types
 
 // Define the expected structure for the detailed shipment response
 type ShipmentDetailApiResponse = Shipment & {
@@ -35,9 +36,20 @@ export async function GET(
         const shipment = await prisma.shipment.findUnique({
             where: { shortId: shortId },
             include: {
-                devices: true,
+                devices: {
+                    select: {
+                        id: true,
+                        serialNumber: true,
+                        assetTag: true,
+                        model: true,
+                        isCheckedIn: true,
+                        checkedInAt: true,
+                        shipmentId: true,
+                        isExtraDevice: true
+                    }
+                },
                 location: true,
-                // No need to explicitly select notifyEmails, include covers it
+                // Implicitly includes all top-level scalar fields like notes, clientReferenceId, notifyEmails etc.
             }
         });
 
@@ -79,18 +91,19 @@ export async function PUT(
 
     try {
         const body = await request.json();
-        // Destructure notifyEmails from body
-        const { senderName, senderEmail, status, trackingNumber, adminCheckedSerials, notifyEmails } = body;
+        // Destructure NEW fields from body
+        const { senderName, senderEmail, status, trackingNumber, adminCheckedSerials, notifyEmails, notes, clientReferenceId } = body;
 
-        // Basic validation (add notifyEmails validation)
+        // Basic validation (add notes and clientReferenceId validation if needed - simple type checks here)
         if (
             typeof senderName !== 'string' || 
             typeof senderEmail !== 'string' || 
             !Object.values(ShipmentStatus).includes(status) || 
             (adminCheckedSerials && !Array.isArray(adminCheckedSerials)) ||
-            // Validate notifyEmails: must be an array of strings if present
             (notifyEmails !== undefined && notifyEmails !== null && !Array.isArray(notifyEmails)) || 
-            (Array.isArray(notifyEmails) && !notifyEmails.every(e => typeof e === 'string'))
+            (Array.isArray(notifyEmails) && !notifyEmails.every(e => typeof e === 'string')) ||
+            (notes !== undefined && notes !== null && typeof notes !== 'string') || // Added notes check
+            (clientReferenceId !== undefined && clientReferenceId !== null && typeof clientReferenceId !== 'string') // Added clientReferenceId check
            ) {
             return NextResponse.json({ error: 'Invalid input data.' }, { status: 400 });
         }
@@ -124,13 +137,15 @@ export async function PUT(
                     senderEmail: senderEmail.trim(),
                     status: status,
                     trackingNumber: trackingNumber?.trim() || null,
-                    // Add notifyEmails to the update data
-                    // Ensure it's an array, default to empty array if null/undefined
                     notifyEmails: Array.isArray(notifyEmails) ? notifyEmails.filter(e => e.trim() !== '') : [], 
+                    // Add NEW fields to the update data
+                    notes: notes?.trim() || null, 
+                    clientReferenceId: clientReferenceId?.trim() || null,
                 },
-                 include: { 
+                 include: { // Ensure we return all needed fields after update
                      devices: true,
                      location: true,
+                     // Include all scalar fields implicitly
                  }
             });
 
@@ -168,6 +183,47 @@ export async function PUT(
              return NextResponse.json({ error: error.message }, { status: 409 }); // Conflict status
         }
         // Prisma errors etc.
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+// --- DELETE Handler --- 
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ shortId: string }> }
+) {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) { // Add role checks if needed
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const shortId = (await params).shortId?.toUpperCase();
+    if (!shortId || shortId.length !== 6) {
+        return NextResponse.json({ error: 'Invalid Shipment ID format.' }, { status: 400 });
+    }
+
+    console.log(`Attempting to delete shipment with shortId: ${shortId}`);
+
+    try {
+        // Attempt to delete the shipment directly
+        await prisma.shipment.delete({
+            where: { shortId: shortId },
+        });
+
+        console.log(`Successfully deleted shipment: ${shortId}`);
+        // Return a success response, 200 OK with message or 204 No Content
+        return NextResponse.json({ message: 'Shipment deleted successfully' }, { status: 200 });
+
+    } catch (error: any) {
+        console.error(`Error deleting shipment ${shortId}:`, error);
+        
+        // Check if the error is because the record to delete was not found
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+            console.log(`Shipment ${shortId} not found for deletion.`);
+            return NextResponse.json({ error: 'Shipment not found' }, { status: 404 });
+        }
+        
+        // Handle other potential errors
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

@@ -9,14 +9,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Toaster as SonnerToaster } from "sonner";
-import { IconLoader2, IconAlertCircle, IconDeviceDesktop, IconSignature, IconTrash, IconDeviceLaptop, IconScan, IconX, IconArrowUp } from '@tabler/icons-react';
+import { IconLoader2, IconAlertCircle, IconDeviceDesktop, IconSignature, IconTrash, IconDeviceLaptop, IconScan, IconX, IconArrowUp, IconCheck, IconAlertTriangle } from '@tabler/icons-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { BrowserMultiFormatReader, Result, NotFoundException, ChecksumException, FormatException } from '@zxing/library';
-import { motion, useAnimation } from 'framer-motion';
+import { motion, useAnimation, useMotionValue, useTransform, animate, useDragControls } from 'framer-motion';
 
 // --- Types --- Using Prisma types directly where possible
 import { Device as PrismaDevice, Shipment as PrismaShipment, ShipmentStatus } from '@prisma/client';
@@ -54,115 +54,104 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({ onResult, onClose, i
     const readerRef = useRef<BrowserMultiFormatReader>(new BrowserMultiFormatReader());
     const [error, setError] = useState<string | null>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
+    const isSettingUp = useRef(false);
 
     useEffect(() => {
-        if (!isEnabled) { 
-             if (readerRef.current) {
+        const cleanup = () => {
+            console.log("CoreScanner cleanup running...");
+            if (readerRef.current) {
                 readerRef.current.reset(); 
             }
-            if (stream) { 
+            if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 setStream(null);
             }
+            isSettingUp.current = false;
+        };
+
+        if (!isEnabled) {
+            cleanup();
             setError(null); 
             return; 
         }
 
-        if (!videoRef.current) return;
+        if (isSettingUp.current) {
+            console.log("CoreScanner setup already in progress, skipping.");
+            return; 
+        }
 
-        // Reader is already initialized in useRef
+        if (!videoRef.current) {
+            console.warn("Video ref not available during setup.");
+            return;
+        } 
+
+        isSettingUp.current = true;
+        setError(null);
+        console.log("CoreScanner effect starting setup...");
+
         const reader = readerRef.current;
+        const currentVideoRef = videoRef.current;
 
         const startScan = async () => {
-            setError(null);
-            console.log("Attempting to start scan..."); 
-            let mediaStream: MediaStream | null = null;
-
-            try {
-                // Attempt 1: Request environment camera directly
-                console.log("Attempting getUserMedia with facingMode: environment");
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' },
-                    audio: false
-                });
-                console.log("Successfully obtained environment camera stream.");
-            } catch (errEnv: any) {
-                console.warn("Failed to get environment camera:", errEnv.name, errEnv.message);
-                // Attempt 2: Fallback to any camera if environment fails
-                if (errEnv.name === 'OverconstrainedError' || errEnv.name === 'NotFoundError' || errEnv.name === 'NotReadableError') { 
-                     console.log("Environment camera failed or not found, attempting default video input...");
-                    try {
-                         mediaStream = await navigator.mediaDevices.getUserMedia({
-                            video: true, // Request any video input
-                            audio: false
-                         });
-                         console.log("Successfully obtained default video stream.");
-                    } catch (errDef: any) {
-                        console.error("Failed to get default camera as well:", errDef.name, errDef.message);
-                        // Re-throw or handle the final failure
-                         throw errDef; // Throw the second error if fallback also fails
-                    }
-                } else {
-                     // If the first error wasn't related to constraints/not found, re-throw it
-                     throw errEnv;
-                }
+            console.log("Attempting to start scan...");
+            
+            if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                 console.error("navigator.mediaDevices.getUserMedia is not available.");
+                 setError("Camera access is not supported...");
+                 isSettingUp.current = false;
+                 return;
             }
 
-            // --- If we successfully obtained a stream --- 
+            let mediaStream: MediaStream | null = null;
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+            } catch (errEnv: any) {
+                 if (errEnv.name === 'OverconstrainedError' || errEnv.name === 'NotFoundError' || errEnv.name === 'NotReadableError') {
+                     try {
+                         mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                     } catch (errDef: any) {
+                         throw errDef;
+                     }
+                 } else {
+                     throw errEnv;
+                 }
+            }
+
             if (!mediaStream) {
-                 // This case should ideally be caught by the errors above, but as a safeguard
-                 setError("Failed to obtain camera stream after attempts.");
-                 console.error("MediaStream is null after getUserMedia attempts.");
+                 setError("Failed to obtain camera stream...");
+                 console.error("MediaStream is null...");
+                 isSettingUp.current = false;
                  return;
             }
 
             setStream(mediaStream);
-            const currentVideoRef = videoRef.current;
-            const reader = readerRef.current;
 
             if (currentVideoRef) {
-                console.log("Video ref found, attempting to set srcObject.");
-                currentVideoRef.srcObject = mediaStream;
-                currentVideoRef.onloadedmetadata = () => {
-                     console.log("Video metadata loaded.");
-                     // Check readyState before playing
-                     console.log(`Video readyState before play: ${currentVideoRef.readyState}`);
-
+                 currentVideoRef.srcObject = mediaStream;
+                 currentVideoRef.onloadedmetadata = () => {
                      currentVideoRef?.play().then(() => {
-                         console.log(`Video playback started successfully. Paused: ${currentVideoRef?.paused}`);
-                         // Add a small delay before starting decode
-                          setTimeout(() => {
-                            // Check state AND dimensions again before decode
-                             const videoEl = currentVideoRef; // Use consistent variable
-                             if (reader && videoEl && !videoEl.paused && videoEl.readyState >= 3 && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) { 
-                                 console.log(`Starting decodeFromStream after delay... Dimensions: ${videoEl.videoWidth}x${videoEl.videoHeight}`); // Log dimensions
-                                 reader.decodeFromStream(mediaStream, videoEl, (result, err) => {
+                         setTimeout(() => {
+                            const videoEl = currentVideoRef;
+                            if (reader && videoEl && !videoEl.paused && videoEl.readyState >= 3 && videoEl.videoWidth > 0) { 
+                                reader.decodeFromStream(mediaStream, videoEl, (result, err) => {
                                       if (result) {
-                                        // console.log("Scan successful:", result.getText());
                                         onResult(result.getText());
                                       } else if (err) {
-                                        // Ignore common errors that happen during continuous scanning
                                         if (!(err instanceof NotFoundException || err instanceof ChecksumException || err instanceof FormatException)) {
-                                             // Log less common errors, but maybe don't show to user unless persistent
                                              console.warn("Scan decode error:", err);
-                                             // Consider adding logic for persistent decode errors
-                                             // setError("Could not read barcode. Try adjusting position."); 
-                                        }
+                                         }
                                       }
                                  }).catch(decodeErr => {
                                       console.error('Decode stream error:', decodeErr);
                                       setError("Failed to initialize scanner stream.");
                                  });
-                             } else {
-                                  console.warn(`Skipping decodeFromStream. Reader: ${!!reader}, VideoEl: ${!!videoEl}, Paused: ${videoEl?.paused}, ReadyState: ${videoEl?.readyState}, Width: ${videoEl?.videoWidth}, Height: ${videoEl?.videoHeight}`); // Log reasons
-                             }
-                          }, 300); // Delay for 300ms
+                            } 
+                         }, 300); 
                      }).catch(playErr => {
                          console.error("Video play error:", playErr);
                          setError("Could not start video stream.");
                      });
                  };
-                 // Add error handling for the video element itself
                  currentVideoRef.onerror = (event) => {
                     console.error("Video element error:", event);
                     setError("An error occurred with the video stream display.");
@@ -172,9 +161,10 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({ onResult, onClose, i
                  setError("Video element not available.");
                  mediaStream.getTracks().forEach(track => track.stop());
                  setStream(null);
+                 isSettingUp.current = false;
              }
         };
-        // --- Error Handling for final failure --- 
+        
         startScan().catch(finalErr => {
              console.error("Final catch block - Camera/Scanner setup error:", finalErr);
              if (finalErr.name === 'NotAllowedError') {
@@ -186,18 +176,12 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({ onResult, onClose, i
              } else { 
                  setError(`Camera Error: ${finalErr.message || 'Unknown setup error'}`);
              }
+        }).finally(() => {
+             isSettingUp.current = false;
+             console.log("CoreScanner setup process finished.");
         });
 
-        // Cleanup function: Stop stream and reset reader on component unmount or when isEnabled changes to false
-        return () => {
-            if (readerRef.current) {
-                readerRef.current.reset(); 
-            }
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                setStream(null);
-            }
-        };
+        return cleanup;
     }, [isEnabled, onResult, onClose]);
 
     return (
@@ -215,145 +199,155 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({ onResult, onClose, i
 };
 // -----------------------------------------------------
 
+// --- New Interaction State Type ---
+type InteractionStateType = 'idle' | 'swiping' | 'submitting' | 'success' | 'error' | 'alreadyReceived';
+
 export default function ShipmentReceivePage() {
-  const params = useParams();
-  const shortId = params?.shortId as string | undefined;
-
-  const [shipment, setShipment] = useState<PublicShipmentData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
-  const signaturePadRef = useRef<SignatureCanvas>(null);
-
-  // State for received items
-  const [receivedSerials, setReceivedSerials] = useState<Set<string>>(new Set());
-  // Add state for list of extra device objects
-  const [extraDevicesList, setExtraDevicesList] = useState<ExtraDeviceInput[]>([]);
-
-  // State for user details
-  const [recipientName, setRecipientName] = useState('');
-  // Add state for signature interaction
-  const [isSigned, setIsSigned] = useState(false); 
-  // Add state for tracking successful submission in this session
-  const [submissionSuccess, setSubmissionSuccess] = useState(false);
-
-  // State for modals
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [isExtraDeviceModalOpen, setIsExtraDeviceModalOpen] = useState(false);
-  // State for extra device modal form
-  const [extraDeviceFormData, setExtraDeviceFormData] = useState<Omit<ExtraDeviceInput, 'id'>>({
+    // --- All State and Hook Declarations First --- 
+    const params = useParams();
+    const shortId = params?.shortId as string | undefined;
+    const signaturePadRef = useRef<SignatureCanvas>(null);
+    const [shipment, setShipment] = useState<PublicShipmentData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [receivedSerials, setReceivedSerials] = useState<Set<string>>(new Set());
+    const [extraDevicesList, setExtraDevicesList] = useState<ExtraDeviceInput[]>([]);
+    const [recipientName, setRecipientName] = useState('');
+    const [isSigned, setIsSigned] = useState(false);
+    const [submissionSuccess, setSubmissionSuccess] = useState(false);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [isExtraDeviceModalOpen, setIsExtraDeviceModalOpen] = useState(false);
+    const [extraDeviceFormData, setExtraDeviceFormData] = useState<Omit<ExtraDeviceInput, 'id'>>({
      serialNumber: '',
      assetTag: '',
      model: ''
-  });
-
-  const [isConfirming, setIsConfirming] = useState(false); // State for swipe confirmation
-
-  const formControls = useAnimation(); // Animation controls for the form
-  const swipeTabControls = useAnimation(); // Animation controls for the swipe tab
-  const confirmScreenControls = useAnimation(); // Animation controls for the confirm screen
-
-  // Fetch data
-  useEffect(() => {
-    if (!shortId) {
-      setError('Shipment ID not found in URL.');
-      setIsLoading(false);
-      return;
-    }
-    const fetchShipmentDetails = async () => {
-       // ... fetch logic using /api/public/shipments/[shortId] ...
-       // Ensure the fetch uses shortId.toUpperCase()
-      setIsLoading(true);
-      setError(null);
-      try {
-            const response = await fetch(`/api/public/shipments/${shortId.toUpperCase()}`);
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || `Error fetching shipment (HTTP ${response.status})`);
-        }
-        setShipment(data);
-            // Pre-check items already marked as received (if API provides isCheckedIn)
-            const preChecked = new Set<string>();
-            data.devices?.forEach((device:any) => {
-                if (device.isCheckedIn) {
-                    preChecked.add(device.serialNumber);
-                }
-            });
-            setReceivedSerials(preChecked);
-
-      } catch (err: any) {
-        console.error("Error fetching shipment details:", err);
-        setError(err.message || 'Failed to load shipment details.');
-        toast.error("Error Loading Shipment", { description: err.message });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchShipmentDetails();
-  }, [shortId]);
-
-  // --- Device Handling Callbacks ---
-  const handleDeviceToggle = useCallback((serialNumber: string) => {
-    console.log(`handleDeviceToggle called for: ${serialNumber}`); 
-    setReceivedSerials(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(serialNumber)) {
-        newSet.delete(serialNumber);
-        toast.info(`Marked ${obfuscateSerial(serialNumber)} as NOT received.`); 
-      } else {
-        newSet.add(serialNumber);
-        toast.success(`Marked ${obfuscateSerial(serialNumber)} as received.`); 
-      }
-      return newSet;
     });
-  }, []);
+    const [interactionState, setInteractionState] = useState<InteractionStateType>('idle');
+    const [statusMessage, setStatusMessage] = useState<string>('');
+    const cardY = useMotionValue(0);
+    const dragControls = useDragControls();
+    
+    // --- Transformations for background text (optional - maybe remove if background is static?) ---
+    // These might feel disconnected now. Consider removing or basing on cardY.
+    // const backgroundTextOpacity = useTransform(cardY, [0, -100], [1, 0]); 
+    // const backgroundTextY = useTransform(cardY, [0, -100], [0, -20]); 
 
-  // Re-add handleScanResult function
-  const handleScanResult = useCallback((scannedSerial: string | null) => {
-       setIsScannerOpen(false); 
-       if (scannedSerial) {
+    // --- Define Can Submit Logic Early --- 
+    const canSubmit = !isSubmitting && recipientName.trim() && isSigned && !submissionSuccess;
+
+    // --- Moved useEffect for Initial State Setting --- 
+    useEffect(() => {
+        if (shipment) {
+             if (submissionSuccess) { 
+                 setInteractionState('success');
+                 setStatusMessage(`Receipt for ${shipment.shortId} confirmed.`);
+             } else if (shipment.status === 'RECEIVED' || shipment.status === 'COMPLETED') {
+                 setInteractionState('alreadyReceived');
+                 setStatusMessage(`Shipment ${shipment.shortId} already received.`);
+             } else {
+                 // No explicit idle set needed if default state is idle
+             }
+        }
+    }, [shipment, submissionSuccess]);
+
+    // --- Fetch Data useEffect --- 
+    // (This was already near the top, which is good)
+    useEffect(() => {
+        if (!shortId) {
+            setError('Shipment ID not found in URL.');
+            setIsLoading(false);
+            return;
+        }
+        const fetchShipmentDetails = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const response = await fetch(`/api/public/shipments/${shortId.toUpperCase()}`);
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || `Error fetching shipment (HTTP ${response.status})`);
+                }
+                setShipment(data);
+                // Pre-check items already marked as received (if API provides isCheckedIn)
+                const preChecked = new Set<string>();
+                data.devices?.forEach((device:any) => {
+                    if (device.isCheckedIn) {
+                        preChecked.add(device.serialNumber);
+                    }
+                });
+                setReceivedSerials(preChecked);
+            } catch (err: any) {
+                console.error("Error fetching shipment details:", err);
+                setError(err.message || 'Failed to load shipment details.');
+                toast.error("Error Loading Shipment", { description: err.message });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchShipmentDetails();
+    }, [shortId]);
+
+    // --- All useCallback Hooks --- 
+    // (Ensure these are also before conditional returns)
+    const handleDeviceToggle = useCallback((serialNumber: string) => {
+        console.log(`handleDeviceToggle called for: ${serialNumber}`); 
+        setReceivedSerials(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(serialNumber)) {
+                newSet.delete(serialNumber);
+                toast.info(`Marked ${obfuscateSerial(serialNumber)} as NOT received.`); 
+            } else {
+                newSet.add(serialNumber);
+                toast.success(`Marked ${obfuscateSerial(serialNumber)} as received.`); 
+            }
+            return newSet;
+        });
+    }, []);
+
+    const handleScanResult = useCallback((scannedSerial: string | null) => {
+        setIsScannerOpen(false); 
+        if (scannedSerial) {
             const upperSerial = scannedSerial.toUpperCase();
-           // Check against manifest devices
-           const manifestDevice = shipment?.devices.find(d => d.serialNumber.toUpperCase() === upperSerial);
-           if (manifestDevice) {
-                 const exactManifestSerial = manifestDevice.serialNumber;
-                 if (!receivedSerials.has(exactManifestSerial)) {
-                     handleDeviceToggle(exactManifestSerial); // Toggle using exact case from manifest
-                 } else {
-                     toast.warning(`Device ${obfuscateSerial(exactManifestSerial)} already marked as received.`);
-                 }
-           } else {
-                 // Check if already in extra list or received list before adding
-                 const alreadyReceived = Array.from(receivedSerials).some(s => s.toUpperCase() === upperSerial);
-                 const alreadyInExtraList = extraDevicesList.some(d => d.serialNumber.toUpperCase() === upperSerial);
-                 
-                 if (alreadyReceived) {
+            // Check against manifest devices
+            const manifestDevice = shipment?.devices.find(d => d.serialNumber.toUpperCase() === upperSerial);
+            if (manifestDevice) {
+                const exactManifestSerial = manifestDevice.serialNumber;
+                if (!receivedSerials.has(exactManifestSerial)) {
+                    handleDeviceToggle(exactManifestSerial); // Toggle using exact case from manifest
+                } else {
+                    toast.warning(`Device ${obfuscateSerial(exactManifestSerial)} already marked as received.`);
+                }
+            } else {
+                // Check if already in extra list or received list before adding
+                const alreadyReceived = Array.from(receivedSerials).some(s => s.toUpperCase() === upperSerial);
+                const alreadyInExtraList = extraDevicesList.some(d => d.serialNumber.toUpperCase() === upperSerial);
+                
+                if (alreadyReceived) {
                     // This case implies it was on the manifest but toggled off, then scanned again. Or it was scanned as extra, submitted, then scanned again in a failed attempt.
                     toast.warning(`Device ${obfuscateSerial(upperSerial)} was already accounted for.`);
-                 } else if (alreadyInExtraList) {
+                } else if (alreadyInExtraList) {
                     toast.warning(`Extra device ${obfuscateSerial(upperSerial)} already added to the list.`);
-                 } else {
-                     // Add as an ExtraDeviceInput object if truly new
-                     setExtraDevicesList(prev => [...prev, { 
-                         id: crypto.randomUUID(), 
-                         serialNumber: upperSerial, 
-                         assetTag: '', 
-                         model: '' 
-                     }]);
-                      toast.info(`Added extra scanned device: ${obfuscateSerial(upperSerial)}.`);
-                 }
-           }
-       }
-   }, [shipment, handleDeviceToggle, extraDevicesList, receivedSerials]); // Dependencies might need adjustment based on exact logic needed
+                } else {
+                    // Add as an ExtraDeviceInput object if truly new
+                    setExtraDevicesList(prev => [...prev, { 
+                        id: crypto.randomUUID(), 
+                        serialNumber: upperSerial, 
+                        assetTag: '', 
+                        model: '' 
+                    }]);
+                    toast.info(`Added extra scanned device: ${obfuscateSerial(upperSerial)}.`);
+                }
+            }
+        }
+    }, [shipment, handleDeviceToggle, extraDevicesList, receivedSerials]); // Dependencies might need adjustment based on exact logic needed
 
-  // --- Modal Form Handlers ---
-   const handleExtraDeviceFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleExtraDeviceFormChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setExtraDeviceFormData(prev => ({ ...prev, [name]: value }));
-   };
+    }, []);
 
-   const handleAddExtraDeviceSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleAddExtraDeviceSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const { serialNumber, assetTag, model } = extraDeviceFormData;
         const trimmedSerial = serialNumber.trim().toUpperCase();
@@ -363,18 +357,18 @@ export default function ShipmentReceivePage() {
             return;
         }
 
-         // Check if already on manifest or received list
+        // Check if already on manifest or received list
         const manifestDevice = shipment?.devices.find(d => d.serialNumber.toUpperCase() === trimmedSerial);
         const alreadyReceived = Array.from(receivedSerials).some(s => s.toUpperCase() === trimmedSerial);
         const alreadyInExtraList = extraDevicesList.some(d => d.serialNumber.toUpperCase() === trimmedSerial);
 
         if (manifestDevice) {
-             toast.warning(`Device ${obfuscateSerial(trimmedSerial)} is already on the manifest. Please check it off above.`);
-             return;
+            toast.warning(`Device ${obfuscateSerial(trimmedSerial)} is already on the manifest. Please check it off above.`);
+            return;
         } 
         if (alreadyReceived) {
-             toast.warning(`Device ${obfuscateSerial(trimmedSerial)} was on the manifest and is already marked received.`);
-             return;
+            toast.warning(`Device ${obfuscateSerial(trimmedSerial)} was on the manifest and is already marked received.`);
+            return;
         } 
         if (alreadyInExtraList) {
             toast.warning(`Extra device ${obfuscateSerial(trimmedSerial)} already added.`);
@@ -396,375 +390,394 @@ export default function ShipmentReceivePage() {
         // Reset form and close modal
         setExtraDeviceFormData({ serialNumber: '', assetTag: '', model: '' });
         setIsExtraDeviceModalOpen(false);
-   };
+    }, [shipment, receivedSerials, extraDevicesList, extraDeviceFormData]); // Ensure dependencies are correct
 
-   const handleRemoveExtraDevice = (idToRemove: string) => {
-       setExtraDevicesList(prev => prev.filter(d => d.id !== idToRemove));
-       // Maybe find serial to show in toast?
-       // toast.success(`Removed extra device.`); 
-   };
+    const handleRemoveExtraDevice = useCallback((idToRemove: string) => {
+        setExtraDevicesList(prev => prev.filter(d => d.id !== idToRemove));
+        // Maybe find serial to show in toast?
+        // toast.success(`Removed extra device.`); 
+    }, []);
 
-  // --- Signature Handling --- 
-  const handleClearSignature = () => {
-    signaturePadRef.current?.clear();
-    setIsSigned(false); // Reset signed state on clear
-  };
+    const handleClearSignature = useCallback(() => {
+        signaturePadRef.current?.clear();
+        setIsSigned(false); 
+    }, []);
 
-  // --- Form Submission Logic ---
-  const handleActualSubmit = async () => {
-    console.log("Actual submission confirmed.");
-    if (!shortId) {
-      toast.error("Shipment ID is missing.");
-      return;
+    const handleActualSubmit = useCallback(async () => {
+        console.log('[handleActualSubmit] Called');
+        setInteractionState('submitting'); 
+        setIsSubmitting(true); 
+        setError(null);
+        setStatusMessage('');
+        
+        // Validation first (prevents API call if invalid)
+        if (!shortId) { 
+            setStatusMessage("Error: Shipment ID is missing.");
+            setInteractionState('error'); 
+            setIsSubmitting(false);
+            // Card should stay hidden in error state
+            return;
+         }
+        const signatureData = signaturePadRef.current?.toDataURL('image/png');
+        if (signaturePadRef.current?.isEmpty() || !signatureData) {
+            toast.error("Signature is required.");
+            setInteractionState('idle'); 
+            setIsSubmitting(false);
+            animate(cardY, 0, { type: 'spring', stiffness: 300, damping: 30 }); // Animate card back
+            return;
+        }
+        if (!recipientName.trim()) {
+            toast.error("Recipient name is required.");
+            setInteractionState('idle'); 
+            setIsSubmitting(false);
+            animate(cardY, 0, { type: 'spring', stiffness: 300, damping: 30 }); // Animate card back
+            return;
+        }
+        
+        // Proceed with API call
+        try {
+            const payload = {
+                recipientName: recipientName.trim(),
+                signature: signatureData,
+                receivedSerials: Array.from(receivedSerials),
+                extraDevices: extraDevicesList.map(({ id, ...rest }) => rest) // Remove temporary client ID
+            };
+            const response = await fetch(`/api/public/shipments/${shortId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+                 const errorData = await response.json();
+                 throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+             }
+            const result = await response.json();
+            setStatusMessage(`Receipt for ${shortId} confirmed!`);
+            setSubmissionSuccess(true); 
+            setInteractionState('success');
+        } catch (err: any) {
+            setError(err.message || "..."); 
+            setStatusMessage(`Error: ${err.message || "Submission failed."}`);
+            setInteractionState('error');
+            setIsSubmitting(false); // Allow retry via potential UI reset later
+        }
+    }, [shortId, recipientName, receivedSerials, extraDevicesList, cardY]); // Added cardY dependency
+
+    // --- Drag End Handler (Now on Card Wrapper) --- 
+    const handleCardDragEnd = useCallback((event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number; y: number; }; velocity: { x: number; y: number; }; }) => {
+        console.log('[CardDragEnd] Fired. Offset Y:', info.offset.y, 'Velocity Y:', info.velocity.y);
+        const swipeThreshold = -100; 
+        const velocityThreshold = -500; 
+        const dragBuffer = -20;
+
+        // Check if swipe met threshold
+        const shouldSubmit = info.offset.y < swipeThreshold || (info.offset.y < dragBuffer && info.velocity.y < velocityThreshold);
+        console.log('[CardDragEnd] Should Submit:', shouldSubmit);
+
+        if (shouldSubmit) {
+            // Don't reset position, call submit. Submission state handles final appearance.
+            handleActualSubmit(); 
+        } else {
+            // Didn't swipe enough, snap card back smoothly
+            console.log('[CardDragEnd] Threshold NOT met. Snapping card back.');
+            setInteractionState('idle'); // Ensure state is idle if drag fails
+            animate(cardY, 0, { type: 'spring', stiffness: 300, damping: 30 });
+        }
+    }, [cardY, handleActualSubmit]); // Dependencies updated
+
+    // --- End of Hook Declarations ---
+    console.log('[ReceivePage] Hooks declared. isLoading:', isLoading, 'error:', error, 'shipment:', !!shipment, 'interactionState:', interactionState);
+
+    // --- Render Logic Starts Here --- 
+
+    // Initial Loading/Error states (these early returns are okay as they don't skip hooks)
+    if (isLoading) {
+        console.log('[ReceivePage] Rendering: Loading state');
+        return <div className="flex min-h-screen items-center justify-center"><IconLoader2 className="h-10 w-10 animate-spin text-muted-foreground" /></div>;
     }
-
-    const signatureData = signaturePadRef.current?.toDataURL('image/png');
-
-    if (signaturePadRef.current?.isEmpty() || !signatureData) {
-      toast.error("Signature is required.");
-      return;
-    }
-    if (!recipientName.trim()) {
-      toast.error("Recipient name is required.");
-      return;
-    }
-    
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const payload = {
-        recipientName: recipientName.trim(),
-        signature: signatureData,
-        receivedSerials: Array.from(receivedSerials),
-        extraDevices: extraDevicesList.map(({ id, ...rest }) => rest) // Remove temporary client ID
-      };
-
-      console.log("Submitting payload:", payload);
-
-      const response = await fetch(`/api/public/shipments/${shortId}`, {
-            method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-        if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log("Submission successful:", result);
-      toast.success("Receipt submitted successfully!");
-      setSubmissionSuccess(true); // Mark as submitted
-      // Optionally reset parts of the form or disable further edits
-
-    } catch (err: any) {
-      console.error("Submission failed:", err);
-      setError(err.message || "Failed to submit receipt.");
-      toast.error(err.message || "Failed to submit receipt.");
-    } finally {
-        setIsSubmitting(false);
-    }
-  };
-
-  // --- Animation Trigger --- 
-  useEffect(() => {
-    if (isConfirming) {
-        formControls.start({ y: -100, opacity: 0.8 }); // Move form up slightly and fade
-        swipeTabControls.start({ y: 100, opacity: 0 }); // Hide swipe tab
-        confirmScreenControls.start({ y: 0, opacity: 1 }); // Show confirm screen
-    } else {
-        formControls.start({ y: 0, opacity: 1 }); // Move form back
-        swipeTabControls.start({ y: 0, opacity: 1 }); // Show swipe tab
-        confirmScreenControls.start({ y: -50, opacity: 0 }); // Hide confirm screen (start below)
-    }
-  }, [isConfirming, formControls, swipeTabControls, confirmScreenControls]);
-
-  // --- Drag Handler for Swipe Tab --- 
-  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number; y: number; }; velocity: { x: number; y: number; }; }) => {
-      const swipeThreshold = -50; // Pixels dragged up
-      const velocityThreshold = -300; // Velocity upwards
-      
-      if (info.offset.y < swipeThreshold || info.velocity.y < velocityThreshold) {
-          // Swiped up sufficiently
-          setIsConfirming(true);
-      } else {
-          // Didn't swipe enough, snap back (handled by animation effect)
-      }
-  };
-
-  // --- Render Logic --- 
-  if (isLoading) {
-      return <div className="flex min-h-screen items-center justify-center"><IconLoader2 className="h-10 w-10 animate-spin text-muted-foreground" /></div>;
-  }
-  if (error) { 
-      return (
-           <div className="flex min-h-screen items-center justify-center text-center p-4">
-              {/* ... error card ... */}
-           </div>
-       );
-  }
-  // Add check here: if still loading or error, or no shipment, don't proceed
-  if (!shipment) { 
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-             <p className="text-muted-foreground">Shipment data could not be loaded or not found.</p>
-      </div>
-    );
-  }
-
-  // --- NEW: Check for immediate submission success FIRST ---
-  if (submissionSuccess) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-center p-4">
-        <Card className="max-w-md">
-                 <CardHeader><CardTitle className="text-green-600">Receipt Confirmed</CardTitle></CardHeader>
-                 <CardContent><p>Shipment <span className="font-mono font-semibold">{shipment.shortId}</span> successfully marked as received.</p></CardContent>
-        </Card>
-      </div>
-    );
-  }
-  // --- End New Check ---
-
-  // If already received (but not just submitted), show confirmation
-  if (shipment.status === 'RECEIVED' || shipment.status === 'COMPLETED') { 
+    if (error && !shipment) { // Only show full error if shipment failed to load at all
+        console.log('[ReceivePage] Rendering: Initial fetch error state');
         return (
-            <div className="flex min-h-screen items-center justify-center text-center p-4">
-                <Card className="max-w-md"><CardHeader><CardTitle className="text-orange-600">Receipt Already Confirmed</CardTitle></CardHeader><CardContent><p>This shipment (ID: {shipment.shortId}) has already been marked as received.</p></CardContent></Card>
-            </div>
-        );
+             <div className="flex min-h-screen items-center justify-center text-center p-4">
+                <Card className="max-w-md"><CardHeader><CardTitle className="text-destructive">Error Loading Shipment</CardTitle></CardHeader><CardContent><p>{error}</p></CardContent></Card>
+             </div>
+         );
+    }
+    if (!shipment) { 
+        console.log('[ReceivePage] Rendering: No shipment data state');
+      return (
+        <div className="flex min-h-screen items-center justify-center">
+               <p className="text-muted-foreground">Shipment data could not be loaded or not found.</p>
+        </div>
+      );
     }
 
-  // Core validation for enabling swipe/submit
-  const canSubmit = !isSubmitting && recipientName.trim() && isSigned && !submissionSuccess;
+    // Define background colors based on state
+    const backgroundColors = {
+        idle: 'bg-neutral-800',
+        swiping: 'bg-blue-600',
+        submitting: 'bg-blue-700 animate-pulse',
+        success: 'bg-green-600',
+        error: 'bg-red-600',
+        alreadyReceived: 'bg-orange-600',
+    };
+    const currentBgColor = backgroundColors[interactionState] || 'bg-neutral-800';
+    console.log('[ReceivePage] Rendering: Main interactive UI. state:', interactionState, 'canSubmit:', canSubmit, 'isSigned:', isSigned, 'name:', recipientName, 'isSubmitting:', isSubmitting);
 
-  return (
-    <main className="container mx-auto max-w-3xl p-4 md:p-8 flex flex-col" style={{ minHeight: 'calc(100vh - 4rem)' }}> { /* Adjust minHeight if needed */ }
-       {/* --- Scanner Modal --- */}
-       <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-          <DialogContent>
-             <DialogHeader><DialogTitle>Scan Device Barcode/QR</DialogTitle></DialogHeader>
-             {/* Integrate the new CoreScannerComponent */}
-             <div id="scanner-container" className="py-4">
-                 {/* Conditionally render based on modal open state */} 
-                  {isScannerOpen && (
-                      <CoreScannerComponent 
-                         onResult={handleScanResult} 
-                         onClose={() => setIsScannerOpen(false)}
-                         isEnabled={isScannerOpen} // Pass state to control scanner
-                      />
-                  )}
-                  {/* Remove placeholder div */} 
-                 <p className="text-xs text-muted-foreground mt-2 text-center">Requires camera access.</p>
-             </div>
-          </DialogContent>
-       </Dialog>
-       {/* ------------------ */}
+    // --- Conditional Return for Final States (Full Screen Background) --- 
+     if (interactionState === 'success' || interactionState === 'error' || interactionState === 'alreadyReceived') {
+         console.log(`[ReceivePage] Rendering: Final state (${interactionState}) - Full Screen Background`);
+         return (
+             <motion.div
+                 className={`fixed inset-0 text-white p-8 flex flex-col justify-center items-center ${currentBgColor} transition-colors duration-300`}
+                 style={{ zIndex: 10 }} 
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+             >
+                 <motion.div 
+                     className="text-center font-semibold text-xl md:text-2xl flex flex-col items-center space-y-4"
+                     initial={{ opacity: 0, y: 10 }} 
+                     animate={{ opacity: 1, y: 0 }}
+                     transition={{ delay: 0.2 }}
+                 >
+                     {/* Replaced emojis with Tabler Icons */}
+                     {interactionState === 'success' && <IconCheck size={48} strokeWidth={1.5} />}
+                     {interactionState === 'error' && <IconX size={48} strokeWidth={1.5} />}
+                     {interactionState === 'alreadyReceived' && <IconAlertTriangle size={48} strokeWidth={1.5} />}
+                     <p>{statusMessage}</p>
+                 </motion.div>
+             </motion.div>
+         );
+     }
 
-       {/* --- Add Extra Device Modal --- */}
-       <Dialog open={isExtraDeviceModalOpen} onOpenChange={setIsExtraDeviceModalOpen}>
-            <DialogContent className="sm:max-w-[450px]">
-                 <DialogHeader>
-                     <DialogTitle>Add Extra Device</DialogTitle>
-                     <DialogDescription>
+    // --- Main Return JSX (Idle/Swiping State) --- 
+    return (
+        <main className="relative flex flex-col overflow-hidden h-screen pb-32">
+            <SonnerToaster richColors position="top-center" /> 
+             {/* --- Scanner Modal --- */}
+             <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+                <DialogContent>
+                   <DialogHeader><DialogTitle>Scan Device Barcode/QR</DialogTitle></DialogHeader>
+                   {/* Integrate the new CoreScannerComponent */}
+                   <div id="scanner-container" className="py-4">
+                       {/* Conditionally render based on modal open state */} 
+                        {isScannerOpen && (
+                            <CoreScannerComponent 
+                               onResult={handleScanResult} 
+                               onClose={() => setIsScannerOpen(false)}
+                               isEnabled={isScannerOpen} // Pass state to control scanner
+                            />
+                        )}
+                        {/* Remove placeholder div */} 
+                       <p className="text-xs text-muted-foreground mt-2 text-center">Requires camera access.</p>
+                   </div>
+                </DialogContent>
+             </Dialog>
+             {/* ------------------ */}
+
+             {/* --- Add Extra Device Modal --- */}
+             <Dialog open={isExtraDeviceModalOpen} onOpenChange={setIsExtraDeviceModalOpen}>
+                  <DialogContent className="sm:max-w-[450px]">
+                       <DialogHeader>
+                           <DialogTitle>Add Extra Device</DialogTitle>
+                           <DialogDescription>
 Enter details for a device received that was not on the original manifest.
-                     </DialogDescription>
-                 </DialogHeader>
-                 <form onSubmit={handleAddExtraDeviceSubmit} className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="modal-extra-serial" className="text-right">Serial*</Label>
-                        <Input id="modal-extra-serial" name="serialNumber" value={extraDeviceFormData.serialNumber} onChange={handleExtraDeviceFormChange} required className="col-span-3"/>
-                    </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="modal-extra-asset" className="text-right">Asset Tag</Label>
-                        <Input id="modal-extra-asset" name="assetTag" value={extraDeviceFormData.assetTag} onChange={handleExtraDeviceFormChange} placeholder="Optional" className="col-span-3"/>
-                    </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="modal-extra-model" className="text-right">Model/Desc</Label>
-                        <Input id="modal-extra-model" name="model" value={extraDeviceFormData.model} onChange={handleExtraDeviceFormChange} placeholder="Optional" className="col-span-3"/>
-                    </div>
-                    <DialogFooter>
-                        <Button type="submit">Add Device</Button>
-                    </DialogFooter>
-                 </form>
-            </DialogContent>
-       </Dialog>
-       {/* ----------------------------- */}
+                           </DialogDescription>
+                       </DialogHeader>
+                       <form onSubmit={handleAddExtraDeviceSubmit} className="grid gap-4 py-4">
+                          <div className="grid grid-cols-4 items-center gap-4">
+                              <Label htmlFor="modal-extra-serial" className="text-right">Serial*</Label>
+                              <Input id="modal-extra-serial" name="serialNumber" value={extraDeviceFormData.serialNumber} onChange={handleExtraDeviceFormChange} required className="col-span-3"/>
+                          </div>
+                           <div className="grid grid-cols-4 items-center gap-4">
+                              <Label htmlFor="modal-extra-asset" className="text-right">Asset Tag</Label>
+                              <Input id="modal-extra-asset" name="assetTag" value={extraDeviceFormData.assetTag} onChange={handleExtraDeviceFormChange} placeholder="Optional" className="col-span-3"/>
+                          </div>
+                           <div className="grid grid-cols-4 items-center gap-4">
+                              <Label htmlFor="modal-extra-model" className="text-right">Model/Desc</Label>
+                              <Input id="modal-extra-model" name="model" value={extraDeviceFormData.model} onChange={handleExtraDeviceFormChange} placeholder="Optional" className="col-span-3"/>
+                          </div>
+                          <DialogFooter>
+                              <Button type="submit">Add Device</Button>
+                          </DialogFooter>
+                       </form>
+                  </DialogContent>
+             </Dialog>
+             {/* ----------------------------- */}
 
-      {/* Wrap Card content in motion.div for animation */}
-      <motion.div 
-        animate={formControls} 
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="flex-grow flex flex-col" // Make this div grow
-      >
-        <Card className="flex-grow flex flex-col"> { /* Ensure Card fills space */ }
-          <CardHeader>
-            <CardTitle className="text-2xl">Confirm Shipment Receipt</CardTitle>
-            <CardDescription>
-              Verify devices received for Shipment ID: <span className="font-mono font-semibold">{shipment.shortId}</span> from {shipment.senderName}.
-            </CardDescription>
-          </CardHeader>
-          
-          <div className="flex-grow flex flex-col space-y-6 p-6"> { /* Main form content area */ }
-            
-            {/* Devices Section */}
-            <div className="space-y-4">
-                 <div className="flex justify-between items-center">
-                     <h3 className="text-lg font-semibold flex items-center">
-                     <IconDeviceLaptop className="mr-2 h-5 w-5 text-muted-foreground"/> Manifested Devices ({shipment.devices?.length ?? 0})
-                     </h3>
-                      {/* Re-add Scan Button */} 
-                      <div className="flex items-center gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => setIsScannerOpen(true)} disabled={isSubmitting}>
-                               <IconScan className="mr-2 h-4 w-4"/> Scan Device
-                          </Button>
-                          <Button type="button" variant="secondary" size="sm" onClick={() => setIsExtraDeviceModalOpen(true)} disabled={isSubmitting}>
-                               <IconDeviceDesktop className="mr-2 h-4 w-4"/> Add Extra Device
-                          </Button>
-             </div>
+            {/* --- Full Screen Background Color Layer --- */}
+            <motion.div
+                className={`fixed inset-0 ${currentBgColor} transition-colors duration-300`}
+                style={{ zIndex: 0 }}
+                animate={{ backgroundColor: backgroundColors[interactionState] }} 
+            />
+
+            {/* --- Invisible Swipe Target Area (Simplified Structure) --- */}
+            { (interactionState === 'idle' || interactionState === 'swiping' || interactionState === 'submitting') && (
+                 <div 
+                    className="absolute bottom-0 left-0 right-0 h-32 flex flex-col items-center justify-center text-white"
+                    style={{ zIndex: 1, cursor: canSubmit ? 'grab' : 'default', touchAction: 'none' }} 
+                    onPointerDown={(e) => {
+                        console.log('[PointerDown] Fired on swipe target. State:', interactionState, 'CanSubmit:', canSubmit);
+                        if (canSubmit && interactionState === 'idle') {
+                            console.log('[PointerDown] Conditions met. Calling dragControls.start...');
+                            try {
+                                dragControls.start(e, { snapToCursor: false }); 
+                                console.log('[PointerDown] dragControls.start called successfully.');
+                            } catch (dragError) {
+                                console.error('[PointerDown] Error calling dragControls.start:', dragError);
+                            }
+                        } else {
+                            console.log('[PointerDown] Conditions NOT met. Drag not initiated.');
+                        }
+                    }}
+                 >
+                    <IconArrowUp className="h-5 w-5 mx-auto mb-1" />
+                    <span>
+                        {interactionState === 'idle' && canSubmit && 'Swipe up to Submit'}
+                        {interactionState === 'idle' && !canSubmit && 'Complete form to enable submission'}
+                    </span>
                  </div>
-                  <p className="text-sm text-muted-foreground">Scan devices or manually check the box for each item received.</p>
-                 <ScrollArea className="h-72 w-full rounded-md border p-4">
-                    {(shipment.devices?.length ?? 0) === 0 ? ( // Use optional chaining
-                         <p className="text-sm text-center text-muted-foreground py-4">No devices listed on manifest.</p>
-                    ) : (
-                        shipment.devices.map((device) => {
-                            // Determine if received (use full serial for check)
-                            const isReceived = receivedSerials.has(device.serialNumber);
-                            return (
-                                 <div key={device.id} className="flex items-center space-x-3 mb-3 border-b pb-3 last:border-b-0 last:pb-0 last:mb-0">
-                                 <Checkbox
-                                     id={`device-${device.id}`}
-                                     // Checked state depends on full serial being in the Set
-                                     checked={isReceived}
-                                     // Toggle uses the full serial
-                                     onCheckedChange={() => handleDeviceToggle(device.serialNumber)}
-                                     aria-labelledby={`label-${device.id}`}
-                                     disabled={isSubmitting}
-                                 />
-                                 <Label
-                                     htmlFor={`device-${device.id}`}
-                                     id={`label-${device.id}`}
-                                     className="flex-grow grid grid-cols-3 gap-2 text-sm font-normal cursor-pointer"
-                                 >
-                                     {/* Display full serial if received, otherwise obfuscated */}
-                                     <span className="font-mono col-span-1" title={device.serialNumber}>
-                                         {isReceived ? device.serialNumber : obfuscateSerial(device.serialNumber)}
-                                     </span>
-                                     <span className="text-muted-foreground col-span-1">{device.assetTag || '-'}</span>
-                                     <span className="text-muted-foreground col-span-1">{device.model || '-'}</span>
-                                 </Label>
-                             </div>
-                            );
-                        })
-                    )}
-                 </ScrollArea>
-           </div>
-
-             {/* Extra Devices Section - Remove old input/list */}
-             {/* Display Added Extra Devices */}
-             {extraDevicesList.length > 0 && (
-                  <div className="space-y-3">
-                     <h3 className="text-lg font-semibold flex items-center">
-                         <IconDeviceDesktop className="mr-2 h-5 w-5 text-muted-foreground"/> Added Extra Devices ({extraDevicesList.length})
-             </h3>
-                     <div className="border rounded p-3 space-y-2">
-                         {extraDevicesList.map(device => (
-                              <div key={device.id} className="flex items-center justify-between text-sm">
-                                 <div className="flex flex-col">
-                                      <span className="font-mono" title={device.serialNumber}>{obfuscateSerial(device.serialNumber)}</span>
-                                      <span className="text-xs text-muted-foreground">
-                                          {device.assetTag || '-'} / {device.model || '-'}
-                                      </span>
-                                 </div>
-                                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveExtraDevice(device.id)} disabled={isSubmitting} title="Remove extra device">
-                                      <IconTrash className="h-4 w-4"/>
-                                 </Button>
-                              </div>
-                         ))}
-             </div>
-           </div>
              )}
 
-            <Separator />
+            {/* --- Card Wrapper (Draggable via Controls) --- */}
+            { (interactionState === 'idle' || interactionState === 'swiping' || interactionState === 'submitting') && (
+                <motion.div
+                    className="relative rounded-b-2xl rounded-t-none overflow-hidden flex-grow flex flex-col max-h-[90vh]" 
+                    style={{ zIndex: 2, y: cardY }} 
+                    drag="y" 
+                    dragControls={dragControls} 
+                    dragListener={false} 
+                    dragConstraints={{ top: -window.innerHeight, bottom: 0 }} 
+                    dragElastic={{ top: 0.1, bottom: 0.8 }} 
+                    onDragEnd={handleCardDragEnd} 
+                    initial={{ y: 0 }}
+                >
+                    <Card className="border-none flex-grow flex flex-col shadow-xl bg-card w-full overflow-hidden"> 
+                        <CardHeader>
+                            <CardTitle className="text-2xl">Confirm Shipment Receipt</CardTitle>
+                            <CardDescription>
+                                Verify devices received for Shipment ID: <span className="font-mono font-semibold">{shipment.shortId}</span> from {shipment.senderName}.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent 
+                            className="flex-grow flex flex-col space-y-6 p-6 overflow-y-auto touch-action-pan-y"
+                        > 
+                            <div className="space-y-4">
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                                    <h3 className="text-lg font-semibold flex items-center mb-2 md:mb-0">
+                                        <IconDeviceLaptop className="mr-2 h-5 w-5 text-muted-foreground"/> Manifested Devices ({shipment?.devices?.length ?? 0})
+                                    </h3>
+                                    <div className="flex items-center gap-2 self-start md:self-center">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setIsScannerOpen(true)} disabled={isSubmitting || interactionState !== 'idle'}>
+                                            <IconScan className="mr-2 h-4 w-4"/> Scan Device
+                                        </Button>
+                                        <Button type="button" variant="secondary" size="sm" onClick={() => setIsExtraDeviceModalOpen(true)} disabled={isSubmitting || interactionState !== 'idle'}>
+                                            <IconDeviceDesktop className="mr-2 h-4 w-4"/> Add Extra Device
+                                        </Button>
+                                    </div>
+                                </div>
+                                <p className="text-sm text-muted-foreground">Scan devices or manually check the box for each item received.</p>
+                                <ScrollArea className="h-72 w-full rounded-md border p-4">
+                                    {(shipment.devices?.length ?? 0) === 0 ? (
+                                        <p className="text-sm text-center text-muted-foreground py-4">No devices listed on manifest.</p>
+                                    ) : (
+                                        shipment.devices.map((device) => {
+                                            const isReceived = receivedSerials.has(device.serialNumber);
+                                            return (
+                                                <div key={device.id} className="flex items-center space-x-3 mb-3 border-b pb-3 last:border-b-0 last:pb-0 last:mb-0">
+                                                    <Checkbox
+                                                        id={`device-${device.id}`}
+                                                        checked={isReceived}
+                                                        onCheckedChange={() => handleDeviceToggle(device.serialNumber)}
+                                                        aria-labelledby={`label-${device.id}`}
+                                                        disabled={isSubmitting || interactionState !== 'idle'}
+                                                    />
+                                                    <Label
+                                                        htmlFor={`device-${device.id}`}
+                                                        id={`label-${device.id}`}
+                                                        className="flex-grow grid grid-cols-3 gap-2 text-sm font-normal cursor-pointer"
+                                                    >
+                                                        <span className="font-mono col-span-1" title={device.serialNumber}>
+                                                            {isReceived ? device.serialNumber : obfuscateSerial(device.serialNumber)}
+                                                        </span>
+                                                        <span className="text-muted-foreground col-span-1">{device.assetTag || '-'}</span>
+                                                        <span className="text-muted-foreground col-span-1">{device.model || '-'}</span>
+                                                    </Label>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </ScrollArea>
+                            </div>
 
-            {/* Recipient Info Section */}
-            <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Recipient Information</h3>
-              <div>
-                     <Label htmlFor="recipientName">Your Name</Label>
-                     <Input id="recipientName" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} required disabled={isSubmitting || submissionSuccess} className="mt-1"/>
-              </div>
-                  <div className="space-y-1">
-                     <Label>Recipient Signature</Label>
-                     <div className="relative rounded-md border border-input bg-background p-2 touch-none">
-                      <SignatureCanvas
-                         ref={signaturePadRef}
-                         penColor='black'
-                             canvasProps={{className: 'w-full h-48'}}
-                             onEnd={() => setIsSigned(true)} 
-                         />
-                         {/* Clear Button */}
-                         <Button 
-                             type="button" 
-                             variant="ghost" 
-                             size="icon" 
-                             className="absolute top-1 right-1 h-6 w-6"
-                             onClick={handleClearSignature}
-                             title="Clear Signature"
-                             disabled={isSubmitting || submissionSuccess}
-                         >
-                             <IconX className="h-4 w-4 text-muted-foreground"/>
-                         </Button>
-                         {/* Prevent interaction after success / during submit */}
-                         {(isSubmitting || submissionSuccess) && <div className="absolute inset-0 bg-gray-200/50 cursor-not-allowed"></div>}
-                     </div>
-                 </div>
-             </div>
+                            {extraDevicesList.length > 0 && (
+                                <div className="space-y-3">
+                                    <h3 className="text-lg font-semibold flex items-center">
+                                        <IconDeviceDesktop className="mr-2 h-5 w-5 text-muted-foreground"/> Added Extra Devices ({extraDevicesList.length})
+                                    </h3>
+                                    <div className="border rounded p-3 space-y-2">
+                                        {extraDevicesList.map(device => (
+                                            <div key={device.id} className="flex items-center justify-between text-sm">
+                                                <div className="flex flex-col">
+                                                    <span className="font-mono" title={device.serialNumber}>{obfuscateSerial(device.serialNumber)}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {device.assetTag || '-'} / {device.model || '-'}
+                                                    </span>
+                                                </div>
+                                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveExtraDevice(device.id)} disabled={isSubmitting || interactionState !== 'idle'} title="Remove extra device">
+                                                    <IconTrash className="h-4 w-4"/>
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
-          </div> { /* End form content area */ }
-        </Card>
-      </motion.div> { /* End animated form div */}
+                            <Separator />
 
-      {/* --- Swipe and Confirmation Area --- */}
-      <div className="relative h-24 mt-4 flex-shrink-0"> { /* Fixed height container for swipe/confirm */ }
-        {/* Swipe Tab */}
-        <motion.div 
-          className={`absolute inset-x-0 bottom-0 bg-gray-900 text-white p-4 rounded-b-md text-center ${canSubmit ? 'cursor-grab' : 'cursor-not-allowed opacity-50'}`}
-          drag="y"
-          dragConstraints={{ top: -150, bottom: 0 }}
-          dragElastic={0.1}
-          onDragEnd={handleDragEnd}
-          animate={swipeTabControls}
-          initial={{ y: 0, opacity: 1 }}
-          style={{ touchAction: canSubmit ? 'pan-y' : 'none' }} // Only allow pan when enabled
-        >
-            <IconArrowUp className="h-5 w-5 mx-auto mb-1" />
-            Swipe up to Submit
-        </motion.div>
-
-        {/* Confirmation Screen */}
-        <motion.div 
-          className="absolute inset-0 bg-white dark:bg-gray-800 p-4 rounded-md shadow-lg flex flex-col items-center justify-center text-center border border-primary"
-          initial={{ y: 50, opacity: 0 }}
-          animate={confirmScreenControls}
-          transition={{ duration: 0.3 }}
-        >
-          <p className="font-semibold mb-4">Ready to Submit Receipt?</p>
-          <div className="flex gap-4">
-            <Button variant="outline" onClick={() => setIsConfirming(false)} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button onClick={handleActualSubmit} disabled={!canSubmit || isSubmitting}>
-              {isSubmitting ? <><IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</> : 'Confirm & Submit'}
-            </Button>
-          </div>
-        </motion.div>
-      </div>
-
-    </main>
-  );
+                            {/* Make this section grow and be a flex column */}
+                            <div className="space-y-4 flex-grow flex flex-col">
+                                <h3 className="text-lg font-semibold">Recipient Information</h3>
+                                <div>
+                                    <Label htmlFor="recipientName">Your Name</Label>
+                                    <Input id="recipientName" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} required disabled={isSubmitting || interactionState !== 'idle'} className="mt-1"/>
+                                </div>
+                                {/* Make this signature container grow and be a flex column */}
+                                <div className="space-y-1 flex-grow flex flex-col">
+                                    <Label>Recipient Signature</Label>
+                                    {/* Make this wrapper div grow but also have a minimum height */}
+                                    <div className="relative rounded-md border border-input bg-background p-2 touch-none flex-grow h-full min-h-[200px]">
+                                        <SignatureCanvas
+                                            ref={signaturePadRef}
+                                            penColor='black'
+                                            canvasProps={{className: 'w-full h-full bg-white'}} 
+                                            onEnd={() => setIsSigned(true)}
+                                        />
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="absolute top-1 right-1 h-6 w-6"
+                                            onClick={handleClearSignature}
+                                            title="Clear Signature"
+                                            disabled={isSubmitting || interactionState !== 'idle'}
+                                        >
+                                            <IconX className="h-4 w-4 text-muted-foreground"/>
+                                        </Button>
+                                        {(isSubmitting || interactionState !== 'idle') && <div className="absolute inset-0 bg-gray-100/50 cursor-not-allowed"></div>}
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    {(interactionState !== 'idle') && (
+                        <div className="absolute inset-0 bg-transparent cursor-not-allowed" style={{ zIndex: 3 }}></div>
+                    )}
+                </motion.div>
+             )}
+        </main>
+    );
 } 

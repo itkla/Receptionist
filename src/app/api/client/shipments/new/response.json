@@ -1,0 +1,5 @@
+{
+  "message": "Shipment created successfully. Manifest generated.",
+  "shortId": "YOUR_SHORT_ID",
+  "manifestUrl": "/api/client/shipments/manifest/YOUR_SHORT_ID"
+} 

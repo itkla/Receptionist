@@ -155,36 +155,58 @@ export async function PUT(
             // 4. Optional: Handle extraDevices - Create new Device records?
             // Requires careful consideration: How to link them? Default values?
             // Example (Needs refinement based on Device schema):
-            /*
             if (extraDevices && extraDevices.length > 0) {
+                console.log(`Received ${extraDevices.length} extra devices for shipment ${shortId}. Creating records...`);
                 await tx.device.createMany({
-                    data: extraDevices.map(device => ({
-                        shipmentId: shipment.id,
+                    data: extraDevices.map((device: any) => ({
+                        shipmentId: shipment.id, // Link to the current shipment
                         serialNumber: device.serialNumber,
-                        assetTag: device.assetTag || null,
-                        model: device.model || null,
-                        isCheckedIn: true, // Mark extra devices as received too
-                        checkedInAt: now,
-                        // Add any other required fields for Device model
+                        assetTag: device.assetTag || null, // Provide defaults or null
+                        model: device.model || null,      // Provide defaults or null
+                        isCheckedIn: true, // Mark extra devices as received immediately
+                        checkedInAt: now,  // Use the current timestamp
+                        isExtraDevice: true // Set the flag for extra devices
+                        // Add any other required fields for Device model here
                     })),
                     skipDuplicates: true // Avoid errors if somehow submitted twice
                 });
+                console.log(`Successfully created records for ${extraDevices.length} extra devices.`);
             }
-            */
 
             return updatedShipment; // Return the result (just the status)
         });
 
         finalShipmentStatus = transactionResult.status;
 
-        // --- Trigger Jamf Unlock (Async, Non-blocking) ---
-        if (receivedSerials && Array.isArray(receivedSerials) && receivedSerials.length > 0) {
-            console.log(`Receipt for ${shortId} submitted, triggering Jamf unlock for ${receivedSerials.length} devices...`);
-            receivedSerials.forEach((serial: string) => {
-                 unlockDevice(serial).catch(err => {
-                    console.error(`[Non-blocking] Failed to trigger unlock for ${serial} on receipt ${shortId}:`, err);
-                 });
-            });
+        // --- Trigger Jamf Unlock (Conditional) ---
+        // Check if necessary JAMF environment variables are set
+        // IMPORTANT: Replace JAMF_URL, JAMF_USER, JAMF_PASSWORD with the actual variable names used by your @/lib/jamf module
+        const jamfUrl = process.env.JAMF_URL;
+        const jamfUser = process.env.JAMF_USER;
+        const jamfPassword = process.env.JAMF_PASSWORD; 
+        const isJamfConfigured = !!jamfUrl && !!jamfUser && !!jamfPassword;
+
+        if (isJamfConfigured) {
+            if (receivedSerials && Array.isArray(receivedSerials) && receivedSerials.length > 0) {
+                console.log(`JAMF configured. Receipt for ${shortId} submitted, triggering Jamf unlock for ${receivedSerials.length} devices...`);
+                // Use Promise.allSettled for better error handling if you need to know all results
+                const unlockPromises = receivedSerials.map((serial: string) => 
+                    unlockDevice(serial).catch(err => {
+                        console.error(`[Non-blocking] Failed to trigger unlock for ${serial} on receipt ${shortId}:`, err);
+                        return { serial, status: 'failed', error: err }; // Return identifiable error object
+                    })
+                );
+                // We don't await Promise.allSettled here to keep it non-blocking,
+                // but you could if you needed to wait for Jamf results before responding.
+                Promise.allSettled(unlockPromises).then(results => {
+                    // Optional: Log detailed results after all promises settle
+                    // console.log(`Jamf unlock results for ${shortId}:`, results);
+                });
+            } else {
+                 console.log(`JAMF configured, but no received serials provided for ${shortId}. Skipping unlock.`);
+            }
+        } else {
+            console.log(`JAMF not configured (missing required URL/User/Password env variables). Skipping Jamf unlock for ${shortId}.`);
         }
         // --- End Jamf Unlock ---
 

@@ -1,0 +1,21 @@
+{
+  "locationName": "Head Office",
+  "devices": [
+    {
+      "serialNumber": "C02XYZ123",
+      "assetTag": "HO-MBP-001",
+      "model": "MacBook Pro 16 (M3)"
+    },
+    {
+      "serialNumber": "F12ABC789",
+      "model": "iPad Air 5"
+    },
+    {
+      "serialNumber": "GHI456JKL"
+    }
+  ],
+  "recipientEmails": ["tech.support@example.com", "inventory@example.com"],
+  "trackingNumber": "1Z987XYZ654321000",
+  "clientReferenceId": "REQ-CLIENT-5566",
+  "notes": "Handle with care. Deliver directly to IT Dept."
+} 

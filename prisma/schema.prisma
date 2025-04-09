@@ -66,7 +66,7 @@ model Shipment {
 
 model Device {
   id          String    @id @default(cuid())
-  serialNumber String    @unique // Ensure serial numbers are unique
+  serialNumber String   // @unique // Ensure serial numbers are unique
   assetTag    String?   // Added asset tag
   model       String?   // Track device model
   isCheckedIn Boolean   @default(false)
@@ -74,6 +74,8 @@ model Device {
 
   shipment    Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade) // Cascade delete devices if shipment is deleted
   shipmentId  String
+
+  isExtraDevice      Boolean  @default(false) // Default to false for manifest devices
 }
 
 enum ShipmentStatus {

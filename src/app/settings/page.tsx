@@ -12,7 +12,8 @@ import {
   IconTrash,
   IconCopy,
   IconAlertCircle,
-  IconLocation
+  IconLocation,
+  IconUser
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { motion } from "motion/react";
@@ -79,6 +80,7 @@ export default function SettingsPage() {
     { label: "Shipments", href: "/", icon: <IconPackage className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
     { label: "Destinations", href: "/locations", icon: <IconLocation className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
     { label: "Settings", href: "/settings", icon: <IconSettings className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> }, // Current page
+    { label: "Users", href: "/users", icon: <IconUser className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
     { label: "Logout", href: "/api/auth/signout", icon: <IconArrowLeft className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
   ];
 
@@ -263,7 +265,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Section 1: Application Configuration (Read-Only) */}
-        <Card>
+        <Card className="border-none shadow-none flex-grow flex flex-col overflow-hidden drop-shadow-xl">
           <CardHeader>
             <CardTitle>Application Configuration</CardTitle>
             <CardDescription>
@@ -312,7 +314,7 @@ export default function SettingsPage() {
         <Separator />
 
         {/* Section 2: API Key Management */}
-        <Card>
+        <Card className="border-none shadow-none flex-grow flex flex-col overflow-hidden drop-shadow-xl">
           <CardHeader className="flex flex-row items-center justify-between">
              <div>
                 <CardTitle>API Key Management</CardTitle>
@@ -444,7 +446,7 @@ export default function SettingsPage() {
         <Separator />
 
         {/* Section 3: Database Settings */}
-        <Card>
+        <Card className="border-none shadow-none flex-grow flex flex-col overflow-hidden drop-shadow-xl">
           <CardHeader>
             <CardTitle>Database Configuration</CardTitle>
             <CardDescription>
@@ -467,7 +469,7 @@ export default function SettingsPage() {
         <Separator /> { /* Separator after Database */ }
 
         {/* Section 4: Timezone Settings */}
-        <Card>
+        <Card className="border-none shadow-none flex-grow flex flex-col overflow-hidden drop-shadow-xl">
           <CardHeader>
             <CardTitle>Timezone Configuration</CardTitle>
             <CardDescription>
@@ -492,7 +494,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* New Card for Email Settings */}
-        <Card>
+        <Card className="border-none shadow-none flex-grow flex flex-col overflow-hidden drop-shadow-xl">
            <CardHeader>
                <CardTitle>Email Notifications</CardTitle>
                <CardDescription>

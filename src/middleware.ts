@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { prisma } from '@/lib/prisma';
+// Remove prisma import if no longer needed here
+// import { prisma } from '@/lib/prisma';
 
 // Explicitly use the Node.js runtime for this middleware
 export const runtime = 'nodejs';
@@ -49,31 +50,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3. Check if initial setup is required
-  if (!isKeycloakConfigured) {
-    console.log('[Middleware] Setup Check: Keycloak not configured.');
-    try {
-      const userCount = await prisma.user.count();
-      console.log(`[Middleware] Setup Check: User count = ${userCount}`);
-      if (userCount === 0) {
-        console.log(`[Middleware] Setup Check: Redirecting to ${setupPage}`);
-        // Redirect to setup page, ensuring we don't redirect if already there (handled above)
-        return NextResponse.redirect(new URL(setupPage, req.url));
-      }
-      console.log('[Middleware] Setup Check: Users exist, proceeding to auth.');
-    } catch (error) {
-      console.error("[Middleware] Setup Check: Error checking user count:", error);
-      // Critical error during setup check. Decide how to handle.
-      // Redirecting to sign-in might leak existence of sign-in page.
-      // Returning a generic error response might be better.
-      // For now, log error and proceed to auth check, which will likely fail.
-      console.log('[Middleware] Setup Check: Error occurred, proceeding to auth check.');
-    }
-  } else {
-    console.log('[Middleware] Setup Check: Keycloak is configured, proceeding to auth.');
-  }
+  // --- REMOVED DATABASE SETUP CHECK FROM HERE --- 
+  // The check will now happen on the sign-in page itself.
+  // If Keycloak *is* configured, we proceed directly to auth check.
+  // If Keycloak is *not* configured, we still proceed to auth check,
+  // which will redirect to /auth/signin if needed, where the final DB check occurs.
+  console.log(`[Middleware] Passing through path ${pathname} for further checks (setup/auth). Keycloak Configured: ${isKeycloakConfigured}`);
 
-  // 4. Authentication Check (runs if setup redirect didn't happen)
+  // 4. Authentication Check (runs for paths not explicitly allowed above)
   if (!secret) {
     // Stop further processing if secret is missing, as getToken will fail.
     console.error("[Middleware Auth] Cannot check token: NEXTAUTH_SECRET is missing.");
@@ -108,6 +92,7 @@ export const config = {
      * Match all request paths except for the ones starting with:
      * - api/auth (NextAuth.js authentication routes)
      * - api/public (Your explicitly public API routes)
+     * - api/client (New client API routes using API key auth)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
@@ -116,7 +101,7 @@ export const config = {
      * because the middleware function itself needs to run on those paths
      * to allow access via NextResponse.next().
      */
-    '/((?!api/auth|api/public|_next/static|_next/image|favicon.ico|uploads).*)',
+    '/((?!api/auth|api/public|api/client|_next/static|_next/image|favicon.ico|uploads).*)',
      // Including '/' explicitly if the regex might miss it (sometimes happens)
      '/',
   ],

@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { senderName, senderEmail, devices, locationValue, trackingNumber, notifyEmails } = body;
+    const { senderName, senderEmail, devices, locationValue, trackingNumber, notifyEmails, notes, clientReferenceId } = body;
 
     // Validation
     if (!senderName || !senderEmail || !locationValue || !Array.isArray(devices) || devices.length === 0) {
@@ -70,6 +70,14 @@ export async function POST(request: Request) {
         parsedNotifyEmails = notifyEmails.filter(e => typeof e === 'string' && e.trim() !== '');
     }
     // TODO: Add stricter email format validation if needed
+
+    // Add notes, clientReferenceId to destructuring
+    if (
+        (notes !== undefined && notes !== null && typeof notes !== 'string') || // Added notes check
+        (clientReferenceId !== undefined && clientReferenceId !== null && typeof clientReferenceId !== 'string') // Added clientReferenceId check
+        ) {
+      return NextResponse.json({ error: 'Missing required fields or invalid data types for new fields.' }, { status: 400 });
+    }
 
     // Determine if locationValue is an ID or a new name
     const isPotentialId = cuid2.isCuid(locationValue);
@@ -107,6 +115,10 @@ export async function POST(request: Request) {
                     status: ShipmentStatus.PENDING,
                     location: locationConnectOrCreate,
                     trackingNumber: trackingNumber || null,
+                    notifyEmails: parsedNotifyEmails, // Use parsed array
+                    // Add new fields
+                    notes: notes?.trim() || null,
+                    clientReferenceId: clientReferenceId?.trim() || null,
                     devices: {
                         create: devices.map((device: DeviceInput) => ({
                             serialNumber: device.serialNumber,
@@ -284,7 +296,18 @@ export async function GET(request: NextRequest) {
                 manifestUrl: true,
                 createdAt: true,
                 updatedAt: true,
-                devices: true,
+                devices: {
+                    select: {
+                        id: true,
+                        serialNumber: true,
+                        assetTag: true,
+                        model: true,
+                        isCheckedIn: true,
+                        checkedInAt: true,
+                        shipmentId: true,
+                        isExtraDevice: true
+                    }
+                },
                 location: { select: { name: true } },
                 recipientName: true,
                 recipientSignature: true,
