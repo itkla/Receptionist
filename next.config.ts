@@ -4,7 +4,7 @@ import type { Configuration } from "webpack"; // Import webpack Configuration ty
 const nextConfig: NextConfig = {
   experimental: {
     // Enable Node.js runtime support for Middleware
-    nodeMiddleware: true, 
+    // nodeMiddleware: true, 
   },
   // Add CORS headers configuration
   async headers() {
