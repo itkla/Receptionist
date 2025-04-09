@@ -50,8 +50,8 @@ async function main() {
   // --- Populate shortId for existing shipments --- 
   console.log('Checking for shipments missing shortId...');
   const shipmentsToUpdate = await prisma.shipment.findMany({
-    // @ts-ignore - Temporarily ignore type error during backfill check
-    where: { shortId: null },
+    // @ts-ignore - Keep ignore for now, as Prisma might still warn depending on version/strictness
+    where: { shortId: { equals: null } }, // Use standard Prisma filter syntax for null check
     select: { id: true }, // Only fetch IDs
   });
 
