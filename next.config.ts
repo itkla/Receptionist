@@ -2,10 +2,6 @@ import type { NextConfig } from "next";
 import type { Configuration } from "webpack"; // Import webpack Configuration type
 
 const nextConfig: NextConfig = {
-  experimental: {
-    // Enable Node.js runtime support for Middleware
-    // nodeMiddleware: true, 
-  },
   // Add CORS headers configuration
   async headers() {
     return [
@@ -18,7 +14,7 @@ const nextConfig: NextConfig = {
           // Allow common methods
           { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, PATCH, OPTIONS" }, 
           // Allow necessary headers, including Authorization for API keys
-          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" }, 
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, x-receptionist-api" },
           // Allow credentials (cookies, authorization headers)
           { key: "Access-Control-Allow-Credentials", value: "true" }, 
         ],
