@@ -47,15 +47,26 @@ export async function POST(request: Request) {
         const validData = parseResult.data;
         console.log("Client shipment: Validated data received:", { ...validData, devices: `${validData.devices.length} devices` });
 
-        // 3. Process Data and Create Shipment (Including Location lookup BY NAME)
-        const location = await prisma.location.findUnique({
-            where: { name: validData.locationName },
+        // 3. Find or Create Location using upsert
+        console.log(`Client shipment: Upserting location based on name: ${validData.locationName}`);
+        const location = await prisma.location.upsert({
+            where: { 
+                name: validData.locationName // Use the unique name field for lookup
+            },
+            update: { 
+                // No specific update needed if found, Prisma handles it
+            },
+            create: { 
+                name: validData.locationName,
+                // Add default recipientEmails if desired for new locations
+                // recipientEmails: [] 
+            }
         });
 
-        if (!location) {
-            return NextResponse.json({ error: `Location with name '${validData.locationName}' not found.` }, { status: 404 });
-        }
-        console.log(`Client shipment: Found location: ${location.name} (ID: ${location.id})`);
+        // This check is no longer needed as upsert guarantees a location object
+        // if (!location) { ... }
+        
+        console.log(`Client shipment: Using location: ${location.name} (ID: ${location.id})`);
         
         let newShipment = null; 
         let attempts = 0;
