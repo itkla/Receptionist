@@ -5,9 +5,9 @@ import { stat } from 'fs/promises'; // Import stat for checking file existence
 
 export async function GET(
     request: Request,
-    { params }: { params: { shortId: string } }
+    { params }: { params: Promise<{ shortId: string }> }
 ) {
-    const shortId = params.shortId;
+    const shortId = (await params).shortId;
 
     if (!shortId) {
         return NextResponse.json({ error: 'Missing shipment shortId' }, { status: 400 });

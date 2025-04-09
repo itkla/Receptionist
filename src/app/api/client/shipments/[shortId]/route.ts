@@ -4,9 +4,9 @@ import { authenticateClientApiKey, ApiAuthError } from '@/lib/apiAuth'; // Reuse
 
 export async function GET(
     request: Request,
-    { params }: { params: { shortId: string } }
+    { params }: { params: Promise<{ shortId: string }> }
 ) {
-    const shortId = params.shortId?.toUpperCase(); // Normalize shortId
+    const shortId = (await params).shortId?.toUpperCase(); // Normalize shortId
 
     if (!shortId) {
         return NextResponse.json({ error: 'Missing shipment shortId' }, { status: 400 });

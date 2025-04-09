@@ -5,7 +5,7 @@ import { getToken } from 'next-auth/jwt';
 // import { prisma } from '@/lib/prisma';
 
 // Explicitly use the Node.js runtime for this middleware
-export const runtime = 'nodejs';
+// export const runtime = 'nodejs';
 
 // --- Configuration ---
 const keycloakIssuer = process.env.KEYCLOAK_ISSUER;

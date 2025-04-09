@@ -157,61 +157,51 @@ async function main() {
 
   const completedShipment = await prisma.shipment.upsert({
       where: { id: 'seed-shipment-2' },
-      // Update block: only update fields that might change if it exists
+      // Update block: update fields BUT NOT devices (let create handle devices)
       update: {
-        status: ShipmentStatus.PENDING, // Reset status on update? Or handle differently?
+        status: ShipmentStatus.COMPLETED, // Set final status here if updating
         recipientName: 'Bob Receiver',
         recipientSignature: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==',
         receivedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        locationId: defaultLocation.id, // Ensure location is linked via ID
-        shortId: seedShipment2ShortId, // Update shortId if needed
+        locationId: defaultLocation.id, 
+        shortId: seedShipment2ShortId, 
       },
-      // Create block: define the full record for creation
+      // Create block: define the full record including devices
       create: {
         id: 'seed-shipment-2',
-        shortId: seedShipment2ShortId, // Add shortId
+        shortId: seedShipment2ShortId, 
         senderName: 'IT Seed Dept 2',
         senderEmail: 'it2@seed.example.com',
-        status: ShipmentStatus.PENDING,
+        // Set final status here if creating as completed
+        status: ShipmentStatus.COMPLETED, 
         recipientName: 'Bob Receiver',
         recipientSignature: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==',
         receivedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        locationId: defaultLocation.id // Link location via ID
+        locationId: defaultLocation.id, // Link location via ID
+        // Add devices directly here
+        devices: {
+            create: [
+                {
+                    serialNumber: 'SEED-SN-003',
+                    assetTag: 'SEED-AT-003',
+                    model: 'iPad Seed Gen 2',
+                    isCheckedIn: true, // Mark as checked in
+                    checkedInAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // Set check-in time
+                },
+                {
+                    serialNumber: 'SEED-SN-004',
+                    assetTag: 'SEED-AT-004',
+                    model: 'iPad Seed Gen 2',
+                    isCheckedIn: true, // Mark as checked in
+                    checkedInAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // Set check-in time
+                }
+            ]
+        }
       },
+      // Include devices to ensure they are available if needed later
+      include: { devices: true } 
   });
-  console.log(`Upserted completedShipment ${completedShipment.shortId} (${completedShipment.id})`);
-
-  // Add devices separately for the completed shipment
-  await prisma.device.upsert({
-      where: { serialNumber: 'SEED-SN-003' },
-      update: { isCheckedIn: true, checkedInAt: completedShipment.receivedAt },
-      create: {
-          serialNumber: 'SEED-SN-003',
-          assetTag: 'SEED-AT-003',
-          model: 'iPad Seed Gen 2',
-          shipmentId: completedShipment.id,
-          isCheckedIn: true,
-          checkedInAt: completedShipment.receivedAt,
-      }
-  });
-    await prisma.device.upsert({
-      where: { serialNumber: 'SEED-SN-004' },
-      update: { isCheckedIn: true, checkedInAt: completedShipment.receivedAt },
-      create: {
-          serialNumber: 'SEED-SN-004',
-          assetTag: 'SEED-AT-004',
-          model: 'iPad Seed Gen 2',
-          shipmentId: completedShipment.id,
-          isCheckedIn: true,
-          checkedInAt: completedShipment.receivedAt,
-      }
-  });
-
-  // Update the shipment status to COMPLETED
-   await prisma.shipment.update({
-        where: { id: completedShipment.id },
-        data: { status: ShipmentStatus.COMPLETED }
-    });
+  console.log(`Upserted completedShipment ${completedShipment.shortId} (${completedShipment.id}) with ${completedShipment.devices.length} devices.`);
 
   // --- Seed Admin User ---
   console.log('Seeding Admin User...');

@@ -6,9 +6,9 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
     request: Request,
-    { params }: { params: { logId: string } }
+    { params }: { params: Promise<{ logId: string }> }
 ) {
-    const logId = params.logId;
+    const logId = (await params).logId;
 
     if (!logId) {
         return NextResponse.json({ error: 'Missing email log ID' }, { status: 400 });
