@@ -2,7 +2,29 @@ import type { NextConfig } from "next";
 import type { Configuration } from "webpack"; // Import webpack Configuration type
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // Enable Node.js runtime support for Middleware
+    nodeMiddleware: true, 
+  },
+  // Add CORS headers configuration
+  async headers() {
+    return [
+      {
+        // Apply these headers to all API routes
+        source: "/api/:path*",
+        headers: [
+          // Allow requests from Concierge's origin
+          { key: "Access-Control-Allow-Origin", value: "http://localhost:1137" }, 
+          // Allow common methods
+          { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, PATCH, OPTIONS" }, 
+          // Allow necessary headers, including Authorization for API keys
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" }, 
+          // Allow credentials (cookies, authorization headers)
+          { key: "Access-Control-Allow-Credentials", value: "true" }, 
+        ],
+      },
+    ];
+  },
   webpack: (
     config: Configuration,
     { isServer }: { isServer: boolean }
