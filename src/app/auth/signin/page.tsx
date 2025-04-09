@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import SignInForm from './SignInForm'; // Import the client component
+import React, { Suspense } from 'react'; // Import Suspense
 
 // This is now a Server Component by default
 export default async function SignInPage() {
@@ -34,5 +35,10 @@ export default async function SignInPage() {
 
   // If setup is complete or Keycloak is used, render the client component form
   console.log("[SignIn Page] Setup check passed or Keycloak configured. Rendering sign-in form.");
-  return <SignInForm />;
+  return (
+      // Wrap the client component that uses useSearchParams in Suspense
+      <Suspense fallback={<div className="flex justify-center items-center h-screen">Loading...</div>}> 
+        <SignInForm />
+      </Suspense>
+  );
 } 

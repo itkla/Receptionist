@@ -18,12 +18,13 @@ export async function POST(
     }
 
     // Find the device by serial number *within this specific shipment*
-    const deviceToUpdate = await prisma.device.findUnique({
+    // Use findFirst because serialNumber is not unique globally
+    const deviceToUpdate = await prisma.device.findFirst({ 
       where: {
         serialNumber: serialNumber,
         // Ensure the device belongs to the specified shipment to prevent cross-shipment check-ins
-        shipmentId: shipmentId,
-      },
+        shipmentId: shipmentId, 
+      }
     });
 
     if (!deviceToUpdate) {
