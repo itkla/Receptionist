@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Toaster as SonnerToaster } from "sonner";
-import { IconLoader2, IconAlertCircle, IconDeviceDesktop, IconSignature, IconTrash, IconDeviceLaptop, IconScan, IconX, IconArrowUp, IconCheck, IconAlertTriangle } from '@tabler/icons-react';
+// import { Toaster as SonnerToaster } from "sonner";
+import { IconLoader2, IconAlertCircle, IconDeviceDesktop, IconSignature, IconTrash, IconDeviceLaptop, IconScan, IconX, IconArrowUp, IconCheck, IconAlertTriangle, IconHelpCircle, IconInfoCircle, IconDotsVertical, IconPlus } from '@tabler/icons-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { BrowserMultiFormatReader, Result, NotFoundException, ChecksumException, FormatException } from '@zxing/library';
 import { motion, useAnimation, useMotionValue, useTransform, animate, useDragControls } from 'framer-motion';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // --- Types --- Using Prisma types directly where possible
 import { Device as PrismaDevice, Shipment as PrismaShipment, ShipmentStatus } from '@prisma/client';
@@ -43,154 +44,272 @@ const obfuscateSerial = (serial: string | null | undefined, keepLast = 4): strin
 };
 
 // --- Core Scanner Component using @zxing/library --- 
+// Define types for overlay data
+type OverlayDataType = { serial: string; id: number };
+
 interface CoreScannerProps {
     onResult: (result: string | null) => void;
-    onClose: () => void; // To close modal on fatal error
+    onClose: () => void;
     isEnabled: boolean; // To control when the scanner is active
+    // Expose trigger functions via ref
+    scannerActionTriggerRef?: React.RefObject<{
+        triggerSuccess: (serial: string) => void;
+        triggerUnknown: (serial: string) => void;
+        triggerAlreadyScanned: (serial: string) => void;
+    } | null>;
 }
 
-const CoreScannerComponent: React.FC<CoreScannerProps> = ({ onResult, onClose, isEnabled }) => {
+const CoreScannerComponent: React.FC<CoreScannerProps> = ({ 
+    onResult, 
+    onClose, 
+    isEnabled, 
+    scannerActionTriggerRef
+}) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const readerRef = useRef<BrowserMultiFormatReader>(new BrowserMultiFormatReader());
     const [error, setError] = useState<string | null>(null);
-    const [stream, setStream] = useState<MediaStream | null>(null);
-    const isSettingUp = useRef(false);
+    const [successOverlayData, setSuccessOverlayData] = useState<OverlayDataType | null>(null);
+    const [unknownOverlayData, setUnknownOverlayData] = useState<OverlayDataType | null>(null);
+    const [alreadyScannedOverlayData, setAlreadyScannedOverlayData] = useState<OverlayDataType | null>(null);
+    const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    // Effect for camera setup/teardown
     useEffect(() => {
-        const cleanup = () => {
-            console.log("CoreScanner cleanup running...");
-            if (readerRef.current) {
-                readerRef.current.reset(); 
-            }
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                setStream(null);
-            }
-            isSettingUp.current = false;
-        };
-
-        if (!isEnabled) {
-            cleanup();
-            setError(null); 
-            return; 
-        }
-
-        if (isSettingUp.current) {
-            console.log("CoreScanner setup already in progress, skipping.");
-            return; 
-        }
-
-        if (!videoRef.current) {
-            console.warn("Video ref not available during setup.");
-            return;
-        } 
-
-        isSettingUp.current = true;
-        setError(null);
-        console.log("CoreScanner effect starting setup...");
-
+        console.log(`Scanner Effect: isEnabled changed to ${isEnabled}`);
         const reader = readerRef.current;
-        const currentVideoRef = videoRef.current;
-
-        const startScan = async () => {
-            console.log("Attempting to start scan...");
-            
-            if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                 console.error("navigator.mediaDevices.getUserMedia is not available.");
-                 setError("Camera access is not supported...");
-                 isSettingUp.current = false;
-                 return;
-            }
-
-            let mediaStream: MediaStream | null = null;
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-            } catch (errEnv: any) {
-                 if (errEnv.name === 'OverconstrainedError' || errEnv.name === 'NotFoundError' || errEnv.name === 'NotReadableError') {
-                     try {
-                         mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                     } catch (errDef: any) {
-                         throw errDef;
-                     }
-                 } else {
-                     throw errEnv;
-                 }
-            }
-
-            if (!mediaStream) {
-                 setError("Failed to obtain camera stream...");
-                 console.error("MediaStream is null...");
-                 isSettingUp.current = false;
-                 return;
-            }
-
-            setStream(mediaStream);
-
-            if (currentVideoRef) {
-                 currentVideoRef.srcObject = mediaStream;
-                 currentVideoRef.onloadedmetadata = () => {
-                     currentVideoRef?.play().then(() => {
-                         setTimeout(() => {
-                            const videoEl = currentVideoRef;
-                            if (reader && videoEl && !videoEl.paused && videoEl.readyState >= 3 && videoEl.videoWidth > 0) { 
-                                reader.decodeFromStream(mediaStream, videoEl, (result, err) => {
-                                      if (result) {
-                                        onResult(result.getText());
-                                      } else if (err) {
-                                        if (!(err instanceof NotFoundException || err instanceof ChecksumException || err instanceof FormatException)) {
-                                             console.warn("Scan decode error:", err);
-                                         }
-                                      }
-                                 }).catch(decodeErr => {
-                                      console.error('Decode stream error:', decodeErr);
-                                      setError("Failed to initialize scanner stream.");
-                                 });
-                            } 
-                         }, 300); 
-                     }).catch(playErr => {
-                         console.error("Video play error:", playErr);
-                         setError("Could not start video stream.");
-                     });
-                 };
-                 currentVideoRef.onerror = (event) => {
-                    console.error("Video element error:", event);
-                    setError("An error occurred with the video stream display.");
-                 };
-             } else {
-                console.error("Video element reference lost before attaching stream.");
-                 setError("Video element not available.");
-                 mediaStream.getTracks().forEach(track => track.stop());
-                 setStream(null);
-                 isSettingUp.current = false;
-             }
+        const videoElement = videoRef.current;
+        let streamTracks: MediaStreamTrack[] = []; 
+        let isCleanupScheduled = false; 
+        const cleanup = () => {
+            if (isCleanupScheduled) return;
+            isCleanupScheduled = true;
+            console.log("Scanner cleanup running.");
+            try { reader?.reset(); } catch (e) { console.error(e); }
+            streamTracks.forEach(track => track.stop());
+            streamTracks = []; 
+            if (videoElement) { videoElement.srcObject = null; videoElement.onloadedmetadata = null; videoElement.onerror = null; }
         };
-        
-        startScan().catch(finalErr => {
-             console.error("Final catch block - Camera/Scanner setup error:", finalErr);
-             if (finalErr.name === 'NotAllowedError') {
-                 setError("Camera access denied. Please enable camera permissions in your browser settings.");
-             } else if (finalErr.name === 'NotFoundError') {
-                 setError("No camera found. Ensure a camera is connected and enabled.");
-             } else if (finalErr.name === 'NotReadableError') {
-                setError("Camera is already in use or access failed. Please ensure it's not used by another application and permissions are granted.");
-             } else { 
-                 setError(`Camera Error: ${finalErr.message || 'Unknown setup error'}`);
-             }
-        }).finally(() => {
-             isSettingUp.current = false;
-             console.log("CoreScanner setup process finished.");
-        });
+
+        if (isEnabled && videoElement) {
+            setError(null);
+            let currentStream: MediaStream | null = null; 
+
+            const startScanner = async () => {
+                console.log("Attempting getUserMedia...");
+                if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    setError("Camera access not supported.");
+                    cleanup(); 
+                    return;
+                }
+
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+                } catch (errEnv: any) {
+                     console.warn("Environment camera failed, trying default...", errEnv.name);
+                     if (errEnv.name === 'OverconstrainedError' || errEnv.name === 'NotFoundError' || errEnv.name === 'NotReadableError') {
+                         try {
+                             currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                         } catch (errDef: any) { throw errDef; } 
+                     } else { throw errEnv; } 
+                }
+                
+                if (!currentStream || isCleanupScheduled) {
+                    if (!currentStream) setError("Failed to obtain camera stream.");
+                    console.error("Stream null or cleanup scheduled after getUserMedia.");
+                    cleanup(); 
+                    return;
+                }
+                console.log("Stream obtained:", currentStream.id);
+                streamTracks = currentStream.getTracks(); 
+
+                videoElement.srcObject = currentStream;
+                
+                try {
+                     await new Promise<void>((resolve, reject) => {
+                          videoElement.onloadedmetadata = () => {
+                             console.log("Video metadata loaded.");
+                              videoElement.play()
+                                 .then(() => {
+                                      console.log("Video playback started.");
+                                      resolve();
+                                  })
+                                 .catch(playErr => {
+                                      console.error("Video play error:", playErr);
+                                      reject(new Error("Could not start video playback."));
+                                  });
+                          };
+                          videoElement.onerror = (event) => { 
+                             console.error("Video element error during setup:", event);
+                              reject(new Error("Video display error."));
+                          };
+                     });
+
+                    if (isCleanupScheduled) {
+                         console.log("Cleanup scheduled while waiting for video play.");
+                         cleanup();
+                         return;
+                    }
+
+                    console.log("Starting decodeFromStream...");
+                    if (reader && videoElement && !videoElement.paused && videoElement.readyState >= 3) {
+                        reader.decodeFromStream(currentStream, videoElement, (result, err) => { 
+                            if (isCleanupScheduled) return; 
+                            
+                            if (successOverlayData || unknownOverlayData || alreadyScannedOverlayData) {
+                                return;
+                            }
+                            
+                            if (result) {
+                                const scannedText = result.getText();
+                                console.log(`[Scanner] Detected: ${scannedText}`);
+                                onResult(scannedText);
+                            } else if (err && !(err instanceof NotFoundException || err instanceof ChecksumException || err instanceof FormatException)) {
+                                console.warn("Scan decode error:", err);
+                            }
+                        }).catch(decodeErr => {
+                             if (isCleanupScheduled) return;
+                            console.error('Decode stream error:', decodeErr);
+                            setError("Failed to start decoder.");
+                             cleanup(); 
+                        });
+                    } else {
+                         console.warn("Skipping decode: Video state not ready or stream changed.");
+                         cleanup(); 
+                    }
+
+                } catch (setupError: any) {
+                     if (!isCleanupScheduled) {
+                         setError(setupError.message || "Error setting up video playback.");
+                         cleanup();
+                     }
+                }
+            };
+
+            startScanner().catch(finalErr => {
+                if (!isCleanupScheduled) {
+                    console.error("Camera/Scanner setup failed:", finalErr);
+                    setError(`Camera Error: ${finalErr.message || 'Unknown setup error'}`);
+                    cleanup();
+                }
+            });
+        } else {
+            cleanup();
+            setError(null);
+        }
 
         return cleanup;
-    }, [isEnabled, onResult, onClose]);
+        
+    }, [isEnabled, onResult, successOverlayData, unknownOverlayData, alreadyScannedOverlayData]); 
+
+    // Expose trigger functions via ref
+    useEffect(() => {
+        console.log('[CoreScannerComponent] Ref Setup Effect Running. Ref defined:', !!scannerActionTriggerRef);
+        if (scannerActionTriggerRef && typeof scannerActionTriggerRef === 'object') {
+            const refObject = {
+                triggerSuccess: (serial: string) => {
+                    console.log(`[CoreScannerComponent] triggerSuccess CALLED for ${serial}`);
+                    setUnknownOverlayData(null); 
+                    setAlreadyScannedOverlayData(null);
+                    setSuccessOverlayData({ serial: serial, id: Date.now() });
+                },
+                triggerUnknown: (serial: string) => {
+                    console.log(`[CoreScannerComponent] triggerUnknown CALLED for ${serial}`);
+                    setSuccessOverlayData(null); 
+                    setAlreadyScannedOverlayData(null);
+                    setUnknownOverlayData({ serial: serial, id: Date.now() });
+                },
+                triggerAlreadyScanned: (serial: string) => {
+                    console.log(`[CoreScannerComponent] triggerAlreadyScanned CALLED for ${serial}`);
+                    setSuccessOverlayData(null); 
+                    setUnknownOverlayData(null);
+                    setAlreadyScannedOverlayData({ serial: serial, id: Date.now() });
+                }
+            };
+            scannerActionTriggerRef.current = refObject;
+             console.log('[CoreScannerComponent] Assigned functions to ref.current');
+        }
+        return () => {
+            if (scannerActionTriggerRef?.current) {
+                console.log('[CoreScannerComponent] Clearing functions from ref.current');
+                 scannerActionTriggerRef.current = null;
+            }
+        };
+    }, [scannerActionTriggerRef]);
+
+    // Effect to clear overlays after a delay
+    useEffect(() => {
+        // Combine all overlay states to check if *any* overlay is active
+        const currentOverlay = successOverlayData || unknownOverlayData || alreadyScannedOverlayData;
+        if (currentOverlay) {
+            console.log(`[CoreScannerComponent] Overlay Clear Effect: Starting 3s timeout for ${currentOverlay.serial}`);
+            if (overlayTimeoutRef.current) {
+                clearTimeout(overlayTimeoutRef.current);
+            }
+            overlayTimeoutRef.current = setTimeout(() => {
+                console.log("[CoreScannerComponent] Overlay Clear Effect: Clearing ALL overlay data via timeout.");
+                setSuccessOverlayData(null);
+                setUnknownOverlayData(null);
+                setAlreadyScannedOverlayData(null);
+            }, 3000); // Reduced timeout to 3 seconds
+        }
+        return () => {
+            if (overlayTimeoutRef.current) {
+                clearTimeout(overlayTimeoutRef.current);
+            }
+        };
+    }, [successOverlayData, unknownOverlayData, alreadyScannedOverlayData]);
+
+    console.log('[CoreScannerComponent] Rendering. Success Data:', successOverlayData, 'Unknown Data:', unknownOverlayData, 'Already Scanned Data:', alreadyScannedOverlayData); // Log state before render
 
     return (
-        <div className="relative aspect-video w-full overflow-hidden rounded-md border bg-muted">
-            <video ref={videoRef} className="w-full h-full object-cover" playsInline /> {/* playsInline is important for mobile */} 
-            {/* Optional: Add overlay for aiming */} 
-             {/* <div className="absolute inset-0 border-4 border-red-500/50 pointer-events-none"></div> */} 
+        <div className="relative aspect-square w-full overflow-hidden rounded-md border bg-muted">
+            <video ref={videoRef} className="w-full h-full object-cover" playsInline /> 
+            {/* Success Overlay */}
+            {successOverlayData && (
+                <motion.div
+                    key={`success-${successOverlayData.id}`} // Unique key
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-green-500/90 text-white pointer-events-none z-10" // Added z-10
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }} 
+                    transition={{ duration: 0.2 }}
+                >
+                    <IconCheck size={64} strokeWidth={2} />
+                    <p className="mt-2 font-semibold text-lg break-all px-4">{successOverlayData.serial}</p>
+                </motion.div>
+            )}
+            {/* Unknown Overlay */}
+            {unknownOverlayData && (
+                <motion.div
+                    key={`unknown-${unknownOverlayData.id}`} // Unique key
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-orange-500/90 text-white pointer-events-none z-10" // Added z-10
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }} 
+                    transition={{ duration: 0.2 }}
+                >
+                    <IconHelpCircle size={64} strokeWidth={2} /> 
+                    <p className="mt-2 font-semibold text-lg break-all px-4">Unknown: {unknownOverlayData.serial}</p>
+                </motion.div>
+            )}
+            {/* Already Scanned Overlay (New) */}
+            {alreadyScannedOverlayData && (
+                <motion.div
+                    key={`already-${alreadyScannedOverlayData.id}`}
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-gray-500/90 text-white pointer-events-none z-10"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }} 
+                    transition={{ duration: 0.2 }}
+                >
+                    <IconInfoCircle size={64} strokeWidth={2} /> 
+                    <p className="mt-2 font-semibold text-lg break-all px-4">Already Scanned: {alreadyScannedOverlayData.serial}</p>
+                </motion.div>
+            )}
+             {/* Aiming overlay (Optional) */}
+             {/* <div className="absolute inset-0 border-4 border-red-500/50 pointer-events-none"></div> */}
             {error && (
-                 <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-center text-destructive p-4">
+                 <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-center text-destructive p-4 z-20"> {/* Ensure error is on top */}
                      <p>{error}</p>
                 </div>
              )}
@@ -204,16 +323,16 @@ type InteractionStateType = 'idle' | 'swiping' | 'submitting' | 'success' | 'err
 
 export default function ShipmentReceivePage() {
     // --- All State and Hook Declarations First --- 
-    const params = useParams();
+  const params = useParams();
     const shortId = params?.shortId as string | undefined;
     const signaturePadRef = useRef<SignatureCanvas>(null);
     const [shipment, setShipment] = useState<PublicShipmentData | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [receivedSerials, setReceivedSerials] = useState<Set<string>>(new Set());
     const [extraDevicesList, setExtraDevicesList] = useState<ExtraDeviceInput[]>([]);
-    const [recipientName, setRecipientName] = useState('');
+  const [recipientName, setRecipientName] = useState('');
     const [isSigned, setIsSigned] = useState(false);
     const [submissionSuccess, setSubmissionSuccess] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -227,6 +346,12 @@ export default function ShipmentReceivePage() {
     const [statusMessage, setStatusMessage] = useState<string>('');
     const cardY = useMotionValue(0);
     const dragControls = useDragControls();
+    // Ref to trigger actions in scanner
+    const scannerActionTriggerRef = useRef<{
+        triggerSuccess: (serial: string) => void;
+        triggerUnknown: (serial: string) => void;
+        triggerAlreadyScanned: (serial: string) => void;
+    } | null>(null);
     
     // --- Transformations for background text (optional - maybe remove if background is static?) ---
     // These might feel disconnected now. Consider removing or basing on cardY.
@@ -253,22 +378,22 @@ export default function ShipmentReceivePage() {
 
     // --- Fetch Data useEffect --- 
     // (This was already near the top, which is good)
-    useEffect(() => {
+  useEffect(() => {
         if (!shortId) {
-            setError('Shipment ID not found in URL.');
-            setIsLoading(false);
-            return;
-        }
-        const fetchShipmentDetails = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
+      setError('Shipment ID not found in URL.');
+      setIsLoading(false);
+      return;
+    }
+    const fetchShipmentDetails = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
                 const response = await fetch(`/api/public/shipments/${shortId.toUpperCase()}`);
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || `Error fetching shipment (HTTP ${response.status})`);
-                }
-                setShipment(data);
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || `Error fetching shipment (HTTP ${response.status})`);
+        }
+        setShipment(data);
                 // Pre-check items already marked as received (if API provides isCheckedIn)
                 const preChecked = new Set<string>();
                 data.devices?.forEach((device:any) => {
@@ -277,70 +402,64 @@ export default function ShipmentReceivePage() {
                     }
                 });
                 setReceivedSerials(preChecked);
-            } catch (err: any) {
-                console.error("Error fetching shipment details:", err);
-                setError(err.message || 'Failed to load shipment details.');
-                toast.error("Error Loading Shipment", { description: err.message });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchShipmentDetails();
+      } catch (err: any) {
+        console.error("Error fetching shipment details:", err);
+        setError(err.message || 'Failed to load shipment details.');
+        toast.error("Error Loading Shipment", { description: err.message });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchShipmentDetails();
     }, [shortId]);
 
     // --- All useCallback Hooks --- 
     // (Ensure these are also before conditional returns)
     const handleDeviceToggle = useCallback((serialNumber: string) => {
+        // This function ONLY toggles state. Toasts are handled by caller (manual click or scan result)
         console.log(`handleDeviceToggle called for: ${serialNumber}`); 
         setReceivedSerials(prev => {
             const newSet = new Set(prev);
             if (newSet.has(serialNumber)) {
                 newSet.delete(serialNumber);
-                toast.info(`Marked ${obfuscateSerial(serialNumber)} as NOT received.`); 
             } else {
                 newSet.add(serialNumber);
-                toast.success(`Marked ${obfuscateSerial(serialNumber)} as received.`); 
             }
             return newSet;
         });
     }, []);
 
     const handleScanResult = useCallback((scannedSerial: string | null) => {
-        setIsScannerOpen(false); 
         if (scannedSerial) {
             const upperSerial = scannedSerial.toUpperCase();
-            // Check against manifest devices
+            console.log(`[Scan Result]: ${upperSerial}`);
             const manifestDevice = shipment?.devices.find(d => d.serialNumber.toUpperCase() === upperSerial);
+            
             if (manifestDevice) {
+                console.log(`[Scan Result]: Found on manifest.`);
                 const exactManifestSerial = manifestDevice.serialNumber;
-                if (!receivedSerials.has(exactManifestSerial)) {
-                    handleDeviceToggle(exactManifestSerial); // Toggle using exact case from manifest
-                } else {
+                // Check if ALREADY received FIRST
+                if (receivedSerials.has(exactManifestSerial)) {
+                    // If already received, just show the overlay and toast, DO NOT toggle
+                    console.log(`[Scan Result]: Already received. Triggering Already Scanned overlay.`);
                     toast.warning(`Device ${obfuscateSerial(exactManifestSerial)} already marked as received.`);
+                    scannerActionTriggerRef.current?.triggerAlreadyScanned(exactManifestSerial);
+                } else {
+                    // If NOT received, THEN toggle and show success overlay/toast
+                    console.log(`[Scan Result]: New scan. Triggering Success overlay and toggling check.`);
+                    handleDeviceToggle(exactManifestSerial); // Only toggle if it wasn't already checked
+                    scannerActionTriggerRef.current?.triggerSuccess(exactManifestSerial);
                 }
             } else {
-                // Check if already in extra list or received list before adding
-                const alreadyReceived = Array.from(receivedSerials).some(s => s.toUpperCase() === upperSerial);
-                const alreadyInExtraList = extraDevicesList.some(d => d.serialNumber.toUpperCase() === upperSerial);
-                
-                if (alreadyReceived) {
-                    // This case implies it was on the manifest but toggled off, then scanned again. Or it was scanned as extra, submitted, then scanned again in a failed attempt.
-                    toast.warning(`Device ${obfuscateSerial(upperSerial)} was already accounted for.`);
-                } else if (alreadyInExtraList) {
-                    toast.warning(`Extra device ${obfuscateSerial(upperSerial)} already added to the list.`);
-                } else {
-                    // Add as an ExtraDeviceInput object if truly new
-                    setExtraDevicesList(prev => [...prev, { 
-                        id: crypto.randomUUID(), 
-                        serialNumber: upperSerial, 
-                        assetTag: '', 
-                        model: '' 
-                    }]);
-                    toast.info(`Added extra scanned device: ${obfuscateSerial(upperSerial)}.`);
-                }
+                 // Logic for unknown devices remains the same
+                 console.log(`[Scan Result]: Not found on manifest.`);
+                 toast.warning(`Device not found on manifest`, {
+                     description: `Scanned: ${obfuscateSerial(upperSerial)}`,
+                 });
+                 scannerActionTriggerRef.current?.triggerUnknown(upperSerial);
             }
         }
-    }, [shipment, handleDeviceToggle, extraDevicesList, receivedSerials]); // Dependencies might need adjustment based on exact logic needed
+    }, [shipment, handleDeviceToggle, receivedSerials]);
 
     const handleExtraDeviceFormChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -348,7 +467,7 @@ export default function ShipmentReceivePage() {
     }, []);
 
     const handleAddExtraDeviceSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    event.preventDefault();
         const { serialNumber, assetTag, model } = extraDeviceFormData;
         const trimmedSerial = serialNumber.trim().toUpperCase();
 
@@ -368,12 +487,12 @@ export default function ShipmentReceivePage() {
         } 
         if (alreadyReceived) {
             toast.warning(`Device ${obfuscateSerial(trimmedSerial)} was on the manifest and is already marked received.`);
-            return;
-        } 
+      return;
+    }
         if (alreadyInExtraList) {
             toast.warning(`Extra device ${obfuscateSerial(trimmedSerial)} already added.`);
-            return;
-        }
+        return;
+    }
 
         // Add to list
         setExtraDevicesList(prev => [
@@ -406,7 +525,7 @@ export default function ShipmentReceivePage() {
     const handleActualSubmit = useCallback(async () => {
         console.log('[handleActualSubmit] Called');
         setInteractionState('submitting'); 
-        setIsSubmitting(true); 
+    setIsSubmitting(true);
         setError(null);
         setStatusMessage('');
         
@@ -443,7 +562,7 @@ export default function ShipmentReceivePage() {
                 extraDevices: extraDevicesList.map(({ id, ...rest }) => rest) // Remove temporary client ID
             };
             const response = await fetch(`/api/public/shipments/${shortId}`, {
-                method: 'PUT',
+            method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -453,7 +572,7 @@ export default function ShipmentReceivePage() {
                  const errorData = await response.json();
                  throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
              }
-            const result = await response.json();
+        const result = await response.json();
             setStatusMessage(`Receipt for ${shortId} confirmed!`);
             setSubmissionSuccess(true); 
             setInteractionState('success');
@@ -493,26 +612,26 @@ export default function ShipmentReceivePage() {
     // --- Render Logic Starts Here --- 
 
     // Initial Loading/Error states (these early returns are okay as they don't skip hooks)
-    if (isLoading) {
+  if (isLoading) {
         console.log('[ReceivePage] Rendering: Loading state');
         return <div className="flex min-h-screen items-center justify-center"><IconLoader2 className="h-10 w-10 animate-spin text-muted-foreground" /></div>;
     }
     if (error && !shipment) { // Only show full error if shipment failed to load at all
         console.log('[ReceivePage] Rendering: Initial fetch error state');
-        return (
-             <div className="flex min-h-screen items-center justify-center text-center p-4">
+    return (
+      <div className="flex min-h-screen items-center justify-center text-center p-4">
                 <Card className="max-w-md"><CardHeader><CardTitle className="text-destructive">Error Loading Shipment</CardTitle></CardHeader><CardContent><p>{error}</p></CardContent></Card>
-             </div>
-         );
-    }
-    if (!shipment) { 
+      </div>
+    );
+  }
+  if (!shipment) {
         console.log('[ReceivePage] Rendering: No shipment data state');
-      return (
-        <div className="flex min-h-screen items-center justify-center">
+    return (
+      <div className="flex min-h-screen items-center justify-center">
                <p className="text-muted-foreground">Shipment data could not be loaded or not found.</p>
-        </div>
-      );
-    }
+      </div>
+    );
+  }
 
     // Define background colors based on state
     const backgroundColors = {
@@ -529,7 +648,7 @@ export default function ShipmentReceivePage() {
     // --- Conditional Return for Final States (Full Screen Background) --- 
      if (interactionState === 'success' || interactionState === 'error' || interactionState === 'alreadyReceived') {
          console.log(`[ReceivePage] Rendering: Final state (${interactionState}) - Full Screen Background`);
-         return (
+        return (
              <motion.div
                  className={`fixed inset-0 text-white p-8 flex flex-col justify-center items-center ${currentBgColor} transition-colors duration-300`}
                  style={{ zIndex: 10 }} 
@@ -553,26 +672,29 @@ export default function ShipmentReceivePage() {
      }
 
     // --- Main Return JSX (Idle/Swiping State) --- 
-    return (
+  return (
         <main className="relative flex flex-col overflow-hidden h-screen pb-32">
-            <SonnerToaster richColors position="top-center" /> 
-             {/* --- Scanner Modal --- */}
-             <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-                <DialogContent>
-                   <DialogHeader><DialogTitle>Scan Device Barcode/QR</DialogTitle></DialogHeader>
-                   {/* Integrate the new CoreScannerComponent */}
-                   <div id="scanner-container" className="py-4">
-                       {/* Conditionally render based on modal open state */} 
+            {/* <SonnerToaster richColors position="top-center" />  */}
+            {/* --- Scanner Modal --- */}
+            <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+                <DialogContent className="sm:max-w-md p-0">
+                    <DialogHeader className="p-4 pb-0">
+                        <DialogTitle>Scan Device Barcode/QR</DialogTitle>
+                        <DialogDescription>Position the code within the frame.</DialogDescription>
+                    </DialogHeader>
+                    <div className="p-4">
                         {isScannerOpen && (
-                            <CoreScannerComponent 
-                               onResult={handleScanResult} 
-                               onClose={() => setIsScannerOpen(false)}
-                               isEnabled={isScannerOpen} // Pass state to control scanner
+                            <CoreScannerComponent
+                               scannerActionTriggerRef={scannerActionTriggerRef}
+                                onResult={handleScanResult}
+                                onClose={() => setIsScannerOpen(false)}
+                                isEnabled={isScannerOpen} 
                             />
                         )}
-                        {/* Remove placeholder div */} 
-                       <p className="text-xs text-muted-foreground mt-2 text-center">Requires camera access.</p>
-                   </div>
+                    </div>
+                    <DialogFooter className="p-4 pt-0">
+                        <Button variant="outline" onClick={() => setIsScannerOpen(false)}>Close</Button>
+                    </DialogFooter>
                 </DialogContent>
              </Dialog>
              {/* ------------------ */}
@@ -656,12 +778,12 @@ Enter details for a device received that was not on the original manifest.
                     initial={{ y: 0 }}
                 >
                     <Card className="border-none flex-grow flex flex-col shadow-xl bg-card w-full overflow-hidden"> 
-                        <CardHeader>
+        <CardHeader>
                             <CardTitle className="text-2xl">Confirm Shipment Receipt</CardTitle>
-                            <CardDescription>
+          <CardDescription>
                                 Verify devices received for Shipment ID: <span className="font-mono font-semibold">{shipment.shortId}</span> from {shipment.senderName}.
-                            </CardDescription>
-                        </CardHeader>
+          </CardDescription>
+        </CardHeader>
                         <CardContent 
                             className="flex-grow flex flex-col space-y-6 p-6 overflow-y-auto touch-action-pan-y"
                         > 
@@ -671,15 +793,15 @@ Enter details for a device received that was not on the original manifest.
                                         <IconDeviceLaptop className="mr-2 h-5 w-5 text-muted-foreground"/> Manifested Devices ({shipment?.devices?.length ?? 0})
                                     </h3>
                                     <div className="flex items-center gap-2 self-start md:self-center">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setIsScannerOpen(true)} disabled={isSubmitting || interactionState !== 'idle'}>
+                                        <Button type="button" variant="default" size="sm" onClick={() => setIsScannerOpen(true)} disabled={isSubmitting || interactionState !== 'idle'}>
                                             <IconScan className="mr-2 h-4 w-4"/> Scan Device
                                         </Button>
                                         <Button type="button" variant="secondary" size="sm" onClick={() => setIsExtraDeviceModalOpen(true)} disabled={isSubmitting || interactionState !== 'idle'}>
-                                            <IconDeviceDesktop className="mr-2 h-4 w-4"/> Add Extra Device
+                                            <IconPlus className="mr-2 h-4 w-4"/> Add Extra Device
                                         </Button>
-                                    </div>
-                                </div>
-                                <p className="text-sm text-muted-foreground">Scan devices or manually check the box for each item received.</p>
+            </div>
+            </div>
+                                <p className="text-sm text-muted-foreground">Scan devices to check them in.</p>
                                 <ScrollArea className="h-72 w-full rounded-md border p-4">
                                     {(shipment.devices?.length ?? 0) === 0 ? (
                                         <p className="text-sm text-center text-muted-foreground py-4">No devices listed on manifest.</p>
@@ -687,37 +809,58 @@ Enter details for a device received that was not on the original manifest.
                                         shipment.devices.map((device) => {
                                             const isReceived = receivedSerials.has(device.serialNumber);
                                             return (
-                                                <div key={device.id} className="flex items-center space-x-3 mb-3 border-b pb-3 last:border-b-0 last:pb-0 last:mb-0">
-                                                    <Checkbox
-                                                        id={`device-${device.id}`}
-                                                        checked={isReceived}
-                                                        onCheckedChange={() => handleDeviceToggle(device.serialNumber)}
-                                                        aria-labelledby={`label-${device.id}`}
-                                                        disabled={isSubmitting || interactionState !== 'idle'}
-                                                    />
+                                                <div 
+                                                    key={device.id} 
+                                                    className={`flex items-center space-x-2 mb-3 border-b pb-3 last:border-b-0 last:pb-0 last:mb-0 p-2 rounded transition-colors ${
+                                                        isReceived 
+                                                        ? 'bg-green-50 dark:bg-green-900/20'
+                                                        : 'hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                                                    }`}
+                                                >
                                                     <Label
-                                                        htmlFor={`device-${device.id}`}
                                                         id={`label-${device.id}`}
-                                                        className="flex-grow grid grid-cols-3 gap-2 text-sm font-normal cursor-pointer"
+                                                        className="flex-grow grid grid-cols-3 gap-2 text-sm font-normal cursor-default items-center"
                                                     >
-                                                        <span className="font-mono col-span-1" title={device.serialNumber}>
+                                                        <span className="font-mono col-span-1 flex items-center" title={device.serialNumber}>
+                                                            {isReceived && <IconCheck className="h-4 w-4 inline-block text-green-600 mr-1 flex-shrink-0" />}
                                                             {isReceived ? device.serialNumber : obfuscateSerial(device.serialNumber)}
                                                         </span>
                                                         <span className="text-muted-foreground col-span-1">{device.assetTag || '-'}</span>
                                                         <span className="text-muted-foreground col-span-1">{device.model || '-'}</span>
                                                     </Label>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 flex-shrink-0" 
+                                                                disabled={isSubmitting || interactionState !== 'idle'}
+                                                                aria-label={`Actions for ${device.serialNumber}`}
+                                                            >
+                                                                <IconDotsVertical className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem 
+                                                                onSelect={() => handleDeviceToggle(device.serialNumber)}
+                                                                disabled={isSubmitting || interactionState !== 'idle'}
+                                                            >
+                                                                {isReceived ? 'Mark as Not Received' : 'Mark as Received'}
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </div>
                                             );
                                         })
                                     )}
                                 </ScrollArea>
-                            </div>
+          </div>
 
                             {extraDevicesList.length > 0 && (
                                 <div className="space-y-3">
                                     <h3 className="text-lg font-semibold flex items-center">
                                         <IconDeviceDesktop className="mr-2 h-5 w-5 text-muted-foreground"/> Added Extra Devices ({extraDevicesList.length})
-                                    </h3>
+            </h3>
                                     <div className="border rounded p-3 space-y-2">
                                         {extraDevicesList.map(device => (
                                             <div key={device.id} className="flex items-center justify-between text-sm">
@@ -732,8 +875,8 @@ Enter details for a device received that was not on the original manifest.
                                                 </Button>
                                             </div>
                                         ))}
-                                    </div>
-                                </div>
+            </div>
+          </div>
                             )}
 
                             <Separator />
@@ -741,18 +884,18 @@ Enter details for a device received that was not on the original manifest.
                             {/* Make this section grow and be a flex column */}
                             <div className="space-y-4 flex-grow flex flex-col">
                                 <h3 className="text-lg font-semibold">Recipient Information</h3>
-                                <div>
+             <div>
                                     <Label htmlFor="recipientName">Your Name</Label>
                                     <Input id="recipientName" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} required disabled={isSubmitting || interactionState !== 'idle'} className="mt-1"/>
-                                </div>
+             </div>
                                 {/* Make this signature container grow and be a flex column */}
                                 <div className="space-y-1 flex-grow flex flex-col">
                                     <Label>Recipient Signature</Label>
                                     {/* Make this wrapper div grow but also have a minimum height */}
-                                    <div className="relative rounded-md border border-input bg-background p-2 touch-none flex-grow h-full min-h-[200px]">
-                                        <SignatureCanvas
-                                            ref={signaturePadRef}
-                                            penColor='black'
+                                    <div className="relative rounded-md border border-input bg-white p-2 touch-none flex-grow h-full min-h-[200px]">
+                     <SignatureCanvas
+                        ref={signaturePadRef}
+                        penColor='black'
                                             canvasProps={{className: 'w-full h-full bg-white'}} 
                                             onEnd={() => setIsSigned(true)}
                                         />
@@ -769,15 +912,15 @@ Enter details for a device received that was not on the original manifest.
                                         </Button>
                                         {(isSubmitting || interactionState !== 'idle') && <div className="absolute inset-0 bg-gray-100/50 cursor-not-allowed"></div>}
                                     </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                </div>
+             </div>
+        </CardContent>
+      </Card>
                     {(interactionState !== 'idle') && (
                         <div className="absolute inset-0 bg-transparent cursor-not-allowed" style={{ zIndex: 3 }}></div>
                     )}
                 </motion.div>
              )}
-        </main>
-    );
+    </main>
+  );
 } 

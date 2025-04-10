@@ -134,9 +134,9 @@ interface ShipmentDetailModalProps {
 // Re-introduce DeviceInput for the form state
 interface DeviceInput {
     id: string; // Keep client-side ID for mapping keys
-    serialNumber: string;
-    assetTag: string;
-    model: string;
+  serialNumber: string;
+  assetTag: string;
+  model: string;
 }
 
 const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOpen, onOpenChange, onShipmentUpdate }) => {
@@ -1161,15 +1161,15 @@ export default function AdminDashboardPage() {
 
 // Use DeviceInput for form state
 const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
-    const [senderName, setSenderName] = useState('');
-    const [senderEmail, setSenderEmail] = useState('');
-    const [devices, setDevices] = useState<DeviceInput[]>([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+  const [senderName, setSenderName] = useState('');
+  const [senderEmail, setSenderEmail] = useState('');
+  const [devices, setDevices] = useState<DeviceInput[]>([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
     const [locationInputValue, setLocationInputValue] = useState<string>('');
     const [trackingNumber, setTrackingNumber] = useState('');
     const [notifyEmails, setNotifyEmails] = useState('');
     const [notes, setNotes] = useState('');
     const [clientReferenceId, setClientReferenceId] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
     const [locations, setLocations] = useState<PrismaLocation[]>([]);
     const [isLoadingLocations, setIsLoadingLocations] = useState(false);
     const [isLocationPopoverOpen, setIsLocationPopoverOpen] = useState(false);
@@ -1196,77 +1196,77 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
     }, []);
 
     // Update handleDeviceChange to use keys of DeviceInput
-    const handleDeviceChange = (index: number, field: keyof Omit<DeviceInput, 'id'>, value: string) => {
-        const newDevices = [...devices];
+  const handleDeviceChange = (index: number, field: keyof Omit<DeviceInput, 'id'>, value: string) => {
+    const newDevices = [...devices];
         // This assignment is safe now because DeviceInput only has string fields
-        newDevices[index][field] = value;
-        setDevices(newDevices);
-    };
+    newDevices[index][field] = value;
+    setDevices(newDevices);
+  };
 
-    const addDevice = () => {
-        setDevices([...devices, { id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
-    };
+  const addDevice = () => {
+    setDevices([...devices, { id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+  };
 
-    const removeDevice = (index: number) => {
-        const newDevices = devices.filter((_, i) => i !== index);
-        if (newDevices.length === 0) {
-            setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
-        } else {
-            setDevices(newDevices);
-        }
-    };
+  const removeDevice = (index: number) => {
+    const newDevices = devices.filter((_, i) => i !== index);
+    if (newDevices.length === 0) {
+      setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+    } else {
+      setDevices(newDevices);
+    }
+  };
 
-    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setIsLoading(true);
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoading(true);
 
-        const validDevices = devices.filter(d => d.serialNumber.trim() !== '').map(d => ({
-            serialNumber: d.serialNumber.trim(),
+    const validDevices = devices.filter(d => d.serialNumber.trim() !== '').map(d => ({
+        serialNumber: d.serialNumber.trim(),
             assetTag: d.assetTag.trim() || undefined,
             model: d.model.trim() || undefined,
-        }));
+    }));
 
-        if (validDevices.length === 0) {
+    if (validDevices.length === 0) {
             toast.error("No valid devices added.", { description: "At least one device with a serial number is required." });
-            setIsLoading(false);
-            return;
-        }
+      setIsLoading(false);
+      return;
+    }
 
         if (!locationInputValue.trim()) {
             toast.error("Location is required.", { description: "Please select or enter a location." });
-            setIsLoading(false);
-            return;
-        }
+        setIsLoading(false);
+        return;
+    }
 
-        try {
-            const response = await fetch('/api/shipments', {
-                method: 'POST',
+    try {
+      const response = await fetch('/api/shipments', {
+        method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    senderName: senderName.trim(),
-                    senderEmail: senderEmail.trim(),
+        body: JSON.stringify({
+            senderName: senderName.trim(),
+            senderEmail: senderEmail.trim(),
                     locationValue: locationInputValue.trim(),
                     trackingNumber: trackingNumber.trim() || null,
                     notifyEmails: notifyEmails.trim() || null,
                     notes: notes.trim() || null,
                     clientReferenceId: clientReferenceId.trim() || null,
                     devices: validDevices,
-                }),
-            });
+        }),
+      });
 
-            const data = await response.json();
+      const data = await response.json();
 
-            if (!response.ok) {
+      if (!response.ok) {
                 throw new Error(data.error || `Shipment creation failed (HTTP ${response.status})`);
-            }
+      }
 
-            toast.success("Shipment Created Successfully!", {
+      toast.success("Shipment Created Successfully!", {
                 description: `Shipment ID: ${data.id}`,
             });
 
-            setSenderName('');
-            setSenderEmail('');
-            setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+      setSenderName('');
+      setSenderEmail('');
+      setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
             setLocationInputValue('');
             setTrackingNumber('');
             setNotifyEmails('');
@@ -1276,25 +1276,25 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
             if (onSuccess) {
                 onSuccess();
             }
-        } catch (err: any) {
+    } catch (err: any) {
             console.error("Error creating shipment:", err);
             toast.error("Shipment Creation Failed", { description: err.message });
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    return (
+  return (
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="space-y-2">
                     <Label htmlFor="modal-sender-name">Sender Name</Label>
                     <Input id="modal-sender-name" value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your Name / Dept" required />
-                </div>
-                <div className="space-y-2">
+              </div>
+              <div className="space-y-2">
                     <Label htmlFor="modal-sender-email">Sender Email</Label>
                     <Input id="modal-sender-email" type="email" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} placeholder="your.email@example.com" required />
-                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1355,30 +1355,30 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
 
             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
                 <h4 className="font-medium text-sm">Devices</h4>
-                {devices.map((device, index) => (
+              {devices.map((device, index) => (
                     <div key={device.id} className="flex items-end gap-2">
                         <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <div className="space-y-1">
+                    <div className="space-y-1">
                                 <Label htmlFor={`modal-serial-${index}`} className="text-xs">Serial*</Label>
                                 <Input id={`modal-serial-${index}`} value={device.serialNumber} onChange={(e) => handleDeviceChange(index, 'serialNumber', e.target.value)} placeholder="C02X..." required />
-                            </div>
-                            <div className="space-y-1">
+                    </div>
+                    <div className="space-y-1">
                                 <Label htmlFor={`modal-asset-${index}`} className="text-xs">Asset Tag</Label>
                                 <Input id={`modal-asset-${index}`} value={device.assetTag} onChange={(e) => handleDeviceChange(index, 'assetTag', e.target.value)} placeholder="ASSET-123" />
-                            </div>
-                            <div className="space-y-1">
+                    </div>
+                    <div className="space-y-1">
                                 <Label htmlFor={`modal-model-${index}`} className="text-xs">Model</Label>
                                 <Input id={`modal-model-${index}`} value={device.model} onChange={(e) => handleDeviceChange(index, 'model', e.target.value)} placeholder="iPad 9th Gen" />
-                            </div>
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeDevice(index)} disabled={devices.length <= 1} className="text-red-500 hover:text-red-700 disabled:opacity-50 shrink-0" aria-label="Remove device">
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
                     </div>
-                ))}
+                  </div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeDevice(index)} disabled={devices.length <= 1} className="text-red-500 hover:text-red-700 disabled:opacity-50 shrink-0" aria-label="Remove device">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
                 <Button type="button" variant="outline" size="sm" onClick={addDevice} className="mt-2 w-full">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Another Device
-                </Button>
+              </Button>
             </div>
 
             <div className="space-y-2">
@@ -1428,9 +1428,9 @@ const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
             <DialogFooter>
                 <Button type="submit" disabled={isLoading}>
                     {isLoading ? <><IconLoader2 className="animate-spin mr-2" /> Creating...</> : 'Create Shipment'}
-                </Button>
+            </Button>
             </DialogFooter>
         </form>
-    );
+  );
 };
 
