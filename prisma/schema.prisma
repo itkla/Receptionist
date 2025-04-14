@@ -107,6 +107,8 @@ model User {
   email     String    @unique
   password  String    // Hashed password
   name      String?
+  notificationsEnabled Boolean @default(true)
+  passwordResetTokens PasswordResetToken[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -136,3 +138,14 @@ model Setting {
   updatedAt DateTime @updatedAt
 }
 // ---------------------------
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique // Hashed token
+  expires   DateTime
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

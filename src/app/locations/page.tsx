@@ -47,7 +47,7 @@ export default function DestinationsListPage() {
     { label: "Destinations", href: "/locations", icon: <IconLocation className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> }, // Current page
     { label: "Settings", href: "/settings", icon: <IconSettings className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
     { label: "Users", href: "/users", icon: <IconUser className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
-    { label: "Logout", href: "/api/auth/signout", icon: <IconArrowLeft className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
+    { label: "Logout", href: "/auth/signout", icon: <IconArrowLeft className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" /> },
   ];
 
   // Fetch destinations
@@ -111,11 +111,17 @@ export default function DestinationsListPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow> <TableCell colSpan={5} className="h-24 text-center"> <IconLoader2 className="animate-spin inline-block mr-2" /> Loading... </TableCell> </TableRow>
+                <>
+                  <TableRow> <TableCell colSpan={5} className="h-24 text-center"> <IconLoader2 className="animate-spin inline-block mr-2" /> Loading... </TableCell> </TableRow>
+                </>
               ) : error ? (
-                <TableRow> <TableCell colSpan={5} className="h-24 text-center text-destructive"> Error: {error} </TableCell> </TableRow>
+                <>
+                  <TableRow> <TableCell colSpan={5} className="h-24 text-center text-destructive"> Error: {error} </TableCell> </TableRow>
+                </>
               ) : destinations.length === 0 ? (
-                <TableRow> <TableCell colSpan={5} className="h-24 text-center">No destinations found.</TableCell> </TableRow>
+                <>
+                  <TableRow> <TableCell colSpan={5} className="h-24 text-center">No destinations found.</TableCell> </TableRow>
+                </>
               ) : (
                 destinations.map((dest) => {
                   // Get the latest shipment date safely

@@ -13,6 +13,7 @@ const isKeycloakConfigured = !!keycloakIssuer;
 const secret = process.env.NEXTAUTH_SECRET; // Secret needed for getToken
 const signInPage = '/auth/signin';
 const setupPage = '/setup-admin';
+const requestPasswordResetPage = '/auth/request-password-reset';
 
 console.log(`[Middleware Init] KEYCLOAK_ISSUER: "${keycloakIssuer}" (Configured: ${isKeycloakConfigured})`);
 if (!secret) {
@@ -47,6 +48,12 @@ export async function middleware(req: NextRequest) {
   // Important to prevent redirect loops if already going there.
   if (pathname.startsWith(signInPage)) {
     console.log(`[Middleware] Allowing direct access to ${signInPage}`);
+    return NextResponse.next();
+  }
+
+  // 3. Allow navigating to the request password reset page itself
+  if (pathname.startsWith(requestPasswordResetPage)) {
+    console.log(`[Middleware] Allowing direct access to ${requestPasswordResetPage}`);
     return NextResponse.next();
   }
 

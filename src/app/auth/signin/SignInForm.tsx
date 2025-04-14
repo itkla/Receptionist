@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation'; // Use navigation for App Router
+import Link from 'next/link'; // Import Link
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner"; // Using sonner for notifications
 import { Toaster as SonnerToaster } from "sonner";
+import { Logo } from "@/components/layout/logos"; // Import Logo
 
 // No server-side imports or logic here anymore
 
@@ -60,12 +62,15 @@ export default function SignInForm() { // Renamed component
 
   // Return only the JSX for the form and its wrapper
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <SonnerToaster richColors />
+        <div className="mb-8">
+            <Logo />
+        </div>
         <Card className="w-full max-w-sm">
             <CardHeader>
-                <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
-                <CardDescription>Enter your email and password to access your account.</CardDescription>
+                <CardTitle className="text-2xl font-bold text-center">Sign In</CardTitle>
+                <CardDescription className="text-center">Enter your credentials to access the dashboard.</CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>
                 <CardContent className="space-y-4">
@@ -75,7 +80,7 @@ export default function SignInForm() { // Renamed component
                         <Input 
                             id="email"
                             type="email"
-                            placeholder="m@example.com"
+                            placeholder="user@example.com"
                             required 
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
@@ -93,10 +98,16 @@ export default function SignInForm() { // Renamed component
                             onChange={(e) => setPassword(e.target.value)}
                             disabled={isLoading}
                         />
+                        {/* Forgot Password Link */}
+                        <div className="text-right">
+                            <Link href="/auth/request-password-reset" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+                                Forgot Password?
+                            </Link>
+                        </div>
                     </div>
                     {/* Error Message Display */}
                     {error && (
-                        <p className="text-sm text-red-600 dark:text-red-500 pt-1">{error}</p>
+                        <p className="text-sm text-destructive pt-1">{error}</p>
                     )}
                 </CardContent>
                 <CardFooter>

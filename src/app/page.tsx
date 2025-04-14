@@ -28,6 +28,7 @@ import {
     IconUser,
     IconDotsVertical,
     IconTrash,
+    IconLogout2
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { motion } from "motion/react";
@@ -91,6 +92,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSession } from "next-auth/react"; // Import useSession
 
 // Type for sorting state
 type SortDirection = 'asc' | 'desc';
@@ -129,6 +131,7 @@ interface ShipmentDetailModalProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
     onShipmentUpdate: () => void; // Callback to refresh dashboard list
+    currentUser?: { name?: string | null; email?: string | null }; // Add currentUser prop
 }
 
 // Re-introduce DeviceInput for the form state
@@ -139,7 +142,7 @@ interface DeviceInput {
   model: string;
 }
 
-const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOpen, onOpenChange, onShipmentUpdate }) => {
+const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOpen, onOpenChange, onShipmentUpdate, currentUser }) => {
     const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -161,6 +164,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                 setIsLoading(false);
                 setIsEditing(false);
                 setIsSaving(false);
+                // Reset form data WITHOUT current user info here, it will be populated when opened again
                 setFormData({ senderName: '', senderEmail: '', status: ShipmentStatus.PENDING, trackingNumber: null, notifyEmails: '', notes: null, clientReferenceId: null });
                 setQrCodeDataUrl(null); // Reset QR code state
                 setIsDeleteDialogOpen(false);
@@ -186,9 +190,10 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                     } else {
                         const data = await response.json();
                         setShipment(data as ShipmentDetail);
+                        // Pre-populate form data: use fetched data first, then current user, then empty string
                         setFormData({
-                            senderName: data.senderName || '',
-                            senderEmail: data.senderEmail || '',
+                            senderName: data.senderName || currentUser?.name || '',
+                            senderEmail: data.senderEmail || currentUser?.email || '',
                             status: data.status as ShipmentStatus || ShipmentStatus.PENDING,
                             trackingNumber: data.trackingNumber || null,
                             notifyEmails: (data.notifyEmails || []).join(', '),
@@ -223,7 +228,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
             };
             fetchAndPrepareData();
         }
-    }, [shortId, isOpen]);
+    }, [shortId, isOpen, currentUser]);
 
     // --- Edit Handlers (copy from previous page.tsx logic) --- 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -560,6 +565,8 @@ export default function AdminDashboardPage() {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0); // State to trigger refresh
+    const { data: session } = useSession(); // Get session data
+    const currentUser = session?.user; // Extract user data
 
     const links = [
         {
@@ -592,9 +599,9 @@ export default function AdminDashboardPage() {
         },
         {
             label: "Logout",
-            href: "/api/auth/signout",
+            href: "/auth/signout",
             icon: (
-                <IconArrowLeft className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" />
+                <IconLogout2 className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" />
             ),
         }
         
@@ -975,14 +982,15 @@ export default function AdminDashboardPage() {
                                     <IconPlus className="mr-2 h-4 w-4" /> Create Shipment
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-[600px]">
+                            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                                 <DialogHeader>
                                     <DialogTitle>Create New Shipment</DialogTitle>
                                     <DialogDescription>
                                         Enter the details for the new shipment manifest. Serial numbers are required.
                                     </DialogDescription>
                                 </DialogHeader>
-                                <CreateShipmentForm onSuccess={() => setIsCreateDialogOpen(false)} />
+                                {/* Pass currentUser to CreateShipmentForm */}
+                                <CreateShipmentForm onSuccess={() => setIsCreateDialogOpen(false)} currentUser={currentUser} />
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -1128,6 +1136,7 @@ export default function AdminDashboardPage() {
                     isOpen={isDetailModalOpen}
                     onOpenChange={setIsDetailModalOpen}
                     onShipmentUpdate={triggerRefresh} // Pass refresh trigger
+                    currentUser={currentUser} // Pass currentUser to Detail Modal
                 />
             </div>
         );
@@ -1159,10 +1168,17 @@ export default function AdminDashboardPage() {
     );
 }
 
-// Use DeviceInput for form state
-const CreateShipmentForm = ({ onSuccess }: { onSuccess?: () => void }) => {
-  const [senderName, setSenderName] = useState('');
-  const [senderEmail, setSenderEmail] = useState('');
+// --- CreateShipmentForm --- 
+interface CreateShipmentFormProps {
+    onSuccess?: () => void;
+    currentUser?: { name?: string | null; email?: string | null }; // Add currentUser prop
+}
+
+// Use the defined interface for props
+const CreateShipmentForm = ({ onSuccess, currentUser }: CreateShipmentFormProps) => {
+  // Initialize state with currentUser data or empty string
+  const [senderName, setSenderName] = useState(currentUser?.name ?? '');
+  const [senderEmail, setSenderEmail] = useState(currentUser?.email ?? '');
   const [devices, setDevices] = useState<DeviceInput[]>([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
     const [locationInputValue, setLocationInputValue] = useState<string>('');
     const [trackingNumber, setTrackingNumber] = useState('');
