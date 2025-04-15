@@ -10,18 +10,18 @@ export default async function SignInPage() {
   const keycloakIssuer = process.env.KEYCLOAK_ISSUER;
   const isKeycloakConfigured = !!keycloakIssuer;
 
-  console.log(`[SignIn Page] Checking setup. Keycloak Configured: ${isKeycloakConfigured}`);
+  // console.log(`[SignIn Page] Checking setup. Keycloak Configured: ${isKeycloakConfigured}`);
 
   if (!isKeycloakConfigured) {
     try {
       const userCount = await prisma.user.count();
-      console.log(`[SignIn Page] User count = ${userCount}`);
+      // console.log(`[SignIn Page] User count = ${userCount}`);
       if (userCount === 0) {
-        console.log("[SignIn Page] No users found, redirecting to /setup-admin");
+        // console.log("[SignIn Page] No users found, redirecting to /setup-admin");
         redirect('/setup-admin'); // Use next/navigation redirect
       }
     } catch (error) {
-      console.error("[SignIn Page] Error checking user count:", error);
+      // console.error("[SignIn Page] Error checking user count:", error);
       // Handle error - maybe show an error message instead of the form,
       // or redirect to setup anyway if DB access fails during setup phase?
       // For now, let it fall through to show the sign-in form, 
@@ -34,7 +34,7 @@ export default async function SignInPage() {
   // --- End Server-side Setup Check ---
 
   // If setup is complete or Keycloak is used, render the client component form
-  console.log("[SignIn Page] Setup check passed or Keycloak configured. Rendering sign-in form.");
+  // console.log("[SignIn Page] Setup check passed or Keycloak configured. Rendering sign-in form.");
   return (
       // Wrap the client component that uses useSearchParams in Suspense
       <Suspense fallback={<div className="flex justify-center items-center h-screen">Loading...</div>}> 

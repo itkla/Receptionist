@@ -17,7 +17,7 @@ export const Logo = () => {
         alt="Receptionist Logo"
         width={24}
         height={20}
-        className="shrink-0"
+        className="shrink-0 inline-block align-middle"
       />
       <motion.span
         initial={{ opacity: 0 }}

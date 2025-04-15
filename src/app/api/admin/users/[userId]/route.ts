@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth"; 
 // Use prisma import based on project structure
 import { prisma } from "@/lib/prisma"; 
-import bcrypt from 'bcryptjs'; // Added bcryptjs
+import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client'; // Import Prisma for types
 
 // --- GET User Details ---

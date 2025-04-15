@@ -366,10 +366,10 @@ export default function ShipmentReceivePage() {
         if (shipment) {
              if (submissionSuccess) { 
                  setInteractionState('success');
-                 setStatusMessage(`Receipt for ${shipment.shortId} confirmed.`);
+                 setStatusMessage(`Receipt of ${shipment.shortId} confirmed. Thanks!`);
              } else if (shipment.status === 'RECEIVED' || shipment.status === 'COMPLETED') {
                  setInteractionState('alreadyReceived');
-                 setStatusMessage(`Shipment ${shipment.shortId} already received.`);
+                 setStatusMessage(`Shipment ${shipment.shortId} already received`);
              } else {
                  // No explicit idle set needed if default state is idle
              }

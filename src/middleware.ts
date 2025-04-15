@@ -97,19 +97,19 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api/auth (NextAuth.js authentication routes)
-     * - api/public (Your explicitly public API routes)
-     * - api/client (New client API routes using API key auth)
+     * - api/ (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - uploads (public uploads directory)
+     * - Any path containing a dot (.), likely a static file.
      * It's important that this matcher DOES NOT exclude '/setup-admin' or '/auth/signin'
      * because the middleware function itself needs to run on those paths
      * to allow access via NextResponse.next().
      */
-    '/((?!api/auth|api/public|api/client|_next/static|_next/image|favicon.ico|uploads).*)',
-     // Including '/' explicitly if the regex might miss it (sometimes happens)
-     '/',
+    // Updated regex to exclude paths with a dot (.)
+    '/((?!api/|_next/static|_next/image|favicon.ico|uploads|.*\.).*)',
+    // Including '/' explicitly if the regex might miss it
+    '/',
   ],
 }; 

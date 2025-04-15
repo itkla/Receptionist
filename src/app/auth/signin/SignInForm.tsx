@@ -89,7 +89,13 @@ export default function SignInForm() { // Renamed component
                     </div>
                     {/* Password Input */}
                     <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
+                        {/* Container for label and link */}
+                        <div className="flex justify-between items-center">
+                            <Label htmlFor="password">Password</Label>
+                            <Link href="/auth/request-password-reset" className="text-sm font-medium text-muted-foreground underline-offset-4 hover:underline hover:text-primary">
+                                Forgot Password?
+                            </Link>
+                        </div>
                         <Input 
                             id="password"
                             type="password"
@@ -98,21 +104,15 @@ export default function SignInForm() { // Renamed component
                             onChange={(e) => setPassword(e.target.value)}
                             disabled={isLoading}
                         />
-                        {/* Forgot Password Link */}
-                        <div className="text-right">
-                            <Link href="/auth/request-password-reset" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-                                Forgot Password?
-                            </Link>
-                        </div>
                     </div>
                     {/* Error Message Display */}
                     {error && (
                         <p className="text-sm text-destructive pt-1">{error}</p>
                     )}
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="pt-4">
                     {/* Submit Button */}
-                    <Button type="submit" className="w-full" disabled={isLoading}>
+                    <Button type="submit" className="w-full cursor-pointer" disabled={isLoading}>
                         {isLoading ? 'Signing In...' : 'Sign In'}
                     </Button>
                 </CardFooter>

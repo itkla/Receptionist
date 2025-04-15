@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { Prisma } from '@prisma/client';
 
-// Define an interface for the route context params
 interface ApiKeyRouteContext {
     params: {
         keyId: string;
@@ -35,7 +34,7 @@ export async function PATCH(
             data: {
                 isActive: isActive,
             },
-            select: { // Return updated status
+            select: {
                 id: true,
                 isActive: true,
                 description: true,
@@ -70,24 +69,18 @@ export const DELETE = async (
     }
 
     try {
-        // Attempt to update the key directly
         await prisma.apiKey.update({
             where: { id: keyId },
             data: { isActive: false }, // Set isActive to false instead of deleting
         });
 
-        // If update succeeds, return success
         return NextResponse.json({ message: 'API Key revoked successfully' }, { status: 200 });
 
     } catch (error) {
         console.error(`Error revoking API key ${keyId}:`, error);
-        
-        // Check if the error is because the record to update was not found
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
             return NextResponse.json({ error: 'API Key not found' }, { status: 404 });
         }
-        
-        // Handle other potential errors
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }; 

@@ -127,23 +127,17 @@ export default function DestinationsListPage() {
                   // Get the latest shipment date safely
                   const latestShipmentDate = dest.shipments && dest.shipments.length > 0 ? dest.shipments[0].createdAt : null;
                   return (
-                    <TableRow key={dest.id}>
-                      <TableCell className="font-mono text-xs">{dest.shortId || dest.id.substring(0, 8)}</TableCell>
-                      <TableCell className="font-medium">{dest.name}</TableCell>
-                      <TableCell>{dest._count?.shipments ?? 0}</TableCell>
-                      <TableCell>
+                    <TableRow key={dest.id}><TableCell className="font-mono text-xs">{dest.shortId || dest.id.substring(0, 8)}</TableCell><TableCell className="font-medium">{dest.name}</TableCell><TableCell>{dest._count?.shipments ?? 0}</TableCell><TableCell>
                         {latestShipmentDate ? (
                           format(new Date(latestShipmentDate), 'Pp')
                         ) : (
                           <span className="italic text-muted-foreground/70">N/A</span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right">
+                      </TableCell><TableCell className="text-right">
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/locations/${dest.id}`}>View</Link>
                         </Button>
-                      </TableCell>
-                    </TableRow>
+                      </TableCell></TableRow>
                   );
                 })
               )}

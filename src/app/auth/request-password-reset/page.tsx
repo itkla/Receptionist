@@ -91,7 +91,7 @@ export default function RequestPasswordResetPage() {
               </p>
             )}
           </CardContent>
-          <CardFooter className="flex flex-col space-y-2">
+          <CardFooter className="flex flex-col space-y-2 pt-4">
             <Button type="submit" className="w-full" disabled={isLoading || isSuccess}>
               {isLoading ? <IconLoader2 className="animate-spin mr-2 h-4 w-4" /> : null}
               {isLoading ? 'Sending...' : 'Send Reset Link'}

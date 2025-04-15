@@ -899,7 +899,7 @@ export default function AdminDashboardPage() {
                         <DialogHeader>
                             <DialogTitle>Verify Received Shipment</DialogTitle>
                             <DialogDescription>
-                                Confirm the items received for shipment <span className="font-mono">{selectedShipmentForVerification?.id.substring(0, 8)}...</span> signed by <span className="font-medium">{selectedShipmentForVerification?.recipientName || 'N/A'}</span>.
+                                Confirm the items received for shipment <span className="font-mono">{selectedShipmentForVerification?.shortId}</span> signed by <span className="font-medium">{selectedShipmentForVerification?.recipientName || 'N/A'}</span>.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="py-4 space-y-4">

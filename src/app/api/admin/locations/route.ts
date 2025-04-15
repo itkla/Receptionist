@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth"; // Adjust path if needed
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/admin/locations - Fetch all locations (minimal data)
 export async function GET(request: Request) {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) { // TODO: Add role check if applicable
+    if (!session || !session.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,7 +19,6 @@ export async function GET(request: Request) {
                 _count: { 
                     select: { shipments: true } 
                 },
-                // Include the latest shipment's creation date
                 shipments: {
                     orderBy: { createdAt: 'desc' },
                     take: 1,

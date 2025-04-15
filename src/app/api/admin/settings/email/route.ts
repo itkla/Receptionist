@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth"; // Adjust path if needed
+import { authOptions } from "@/lib/auth";
 
-const SETTING_KEY = "adminNotifyEmails"; // Use a constant for the key
+const SETTING_KEY = "adminNotifyEmails";
 
 // GET handler to fetch email settings
 export async function GET(request: Request) {
     const session = await getServerSession(authOptions);
-    // TODO: Add role check if necessary 
     if (!session || !session.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -35,7 +34,6 @@ export async function GET(request: Request) {
 // PUT handler to update email settings
 export async function PUT(request: Request) {
     const session = await getServerSession(authOptions);
-    // TODO: Add role check if necessary (e.g., ensure user is ADMIN)
     if (!session || !session.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -49,7 +47,7 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'Invalid input data: adminNotifyEmails must be a string.' }, { status: 400 });
         }
 
-        // Validate individual emails (optional but recommended)
+        // Validate individual emails
         const emails = adminNotifyEmails.split(',').map(e => e.trim()).filter(e => e);
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         for (const email of emails) {
@@ -60,7 +58,6 @@ export async function PUT(request: Request) {
         const validatedEmailString = emails.join(','); // Use cleaned up list
 
         // Upsert the setting into the database
-        // Assumes a Setting model like: model Setting { key String @id, value String }
         const settingKey = SETTING_KEY;
         await prisma.setting.upsert({
             where: { key: settingKey },

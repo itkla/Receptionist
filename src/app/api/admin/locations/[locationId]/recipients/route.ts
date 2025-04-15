@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth"; // Adjust path if needed
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { z } from 'zod'; // For input validation
+import { z } from 'zod';
 
 interface RouteParams {
     params: {
@@ -10,22 +10,20 @@ interface RouteParams {
     }
 }
 
-// Define the input type structure explicitly FIRST
 interface UpdateRecipientsPayload {
     recipientEmails?: string[];
     addEmail?: string;
     removeEmail?: string;
 }
 
-// Then define the Zod schema
 const updateRecipientsSchema = z.object({
     recipientEmails: z.array(z.string().email({ message: "Invalid email address provided" })).optional(),
     addEmail: z.string().email().optional(),
     removeEmail: z.string().email().optional()
-}).refine((data: UpdateRecipientsPayload) => !(data.addEmail && data.removeEmail), { // Use the interface type
+}).refine((data: UpdateRecipientsPayload) => !(data.addEmail && data.removeEmail), {
     message: "Cannot add and remove email in the same request",
     path: ["addEmail", "removeEmail"],
-}).refine((data: UpdateRecipientsPayload) => !(data.recipientEmails && (data.addEmail || data.removeEmail)), { // Use the interface type
+}).refine((data: UpdateRecipientsPayload) => !(data.recipientEmails && (data.addEmail || data.removeEmail)), {
     message: "Cannot specify full list and add/remove operation simultaneously",
     path: ["recipientEmails"],
 });
@@ -38,7 +36,7 @@ export async function PUT(
     { params }: { params: Promise<{ locationId: string }> }
 ) {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) { // TODO: Add role check
+    if (!session || !session.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -56,8 +54,6 @@ export async function PUT(
         }
 
         const { recipientEmails, addEmail, removeEmail } = validation.data;
-
-        // Fetch location ensuring it exists
         const location = await prisma.location.findUnique({
             where: { id: locationId },
         });
@@ -65,32 +61,25 @@ export async function PUT(
         if (!location) {
             return NextResponse.json({ error: 'Location not found' }, { status: 404 });
         }
-        console.log("[API PUT Recipient] Fetched location:", JSON.stringify(location)); // Log fetched location
-
-        // Ensure current emails are treated as string[]
+        console.log("[API PUT Recipient] Fetched location:", JSON.stringify(location));
         let currentEmails: string[] = Array.isArray(location.recipientEmails) ? location.recipientEmails as string[] : [];
         console.log("[API PUT Recipient] Current emails initialized as:", currentEmails); // Log initialized current emails
 
-        let updatedEmails: string[] = [...currentEmails]; // Work with a copy
+        let updatedEmails: string[] = [...currentEmails];
 
         if (recipientEmails !== undefined) {
-            // Replace the entire list (handle potential empty array)
             updatedEmails = [...new Set(recipientEmails)];
         } else if (addEmail) {
-            // Add an email if it doesn't exist
             console.log(`[API PUT Recipient] Attempting to add email: ${addEmail}`); // Log add attempt
             if (!currentEmails.includes(addEmail)) {
                 updatedEmails.push(addEmail);
             }
         } else if (removeEmail) {
-            // Remove an email
             console.log(`[API PUT Recipient] Attempting to remove email: ${removeEmail}`); // Log remove attempt
             updatedEmails = currentEmails.filter(email => email !== removeEmail);
         }
 
         console.log("[API PUT Recipient] Updated emails before save:", updatedEmails); // Log before saving
-
-        // Update the location in the database
         const updatedLocation = await prisma.location.update({
             where: { id: locationId },
             data: {
