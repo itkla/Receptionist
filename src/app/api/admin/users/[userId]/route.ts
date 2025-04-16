@@ -133,7 +133,7 @@ export async function PUT(
 // --- DELETE User ---
 export async function DELETE(
     request: Request, // Request object might not be needed but included for consistency
-    { params }: { params: { userId: string } }
+    { params }: { params: Promise<{ userId: string }> }
 ) {
     const session = await getServerSession(authOptions);
     // --- Authorization Check ---
@@ -143,7 +143,7 @@ export async function DELETE(
     }
     // -------------------------
 
-    const userId = params.userId;
+    const userId = (await params).userId;
     if (!userId) {
         return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
