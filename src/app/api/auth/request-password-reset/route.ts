@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Resend } from 'resend';
 import { z } from 'zod';
-import PasswordResetEmail from '@/components/emails/PasswordResetEmail'; // Import the email component
+import PasswordResetEmail from '@/emails/PasswordResetEmail';
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
