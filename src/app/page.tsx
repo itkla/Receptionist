@@ -371,7 +371,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                                              <DropdownMenuItem 
                                                  onClick={(e) => { 
                                                      e.preventDefault(); 
-                                                     console.log("Delete menu item CLICKED. Setting delete dialog open."); // Log click
+                                                    //  console.log("Delete menu item CLICKED. Setting delete dialog open."); // Log click
                                                      setIsDeleteDialogOpen(true); // Open the confirmation dialog
                                                  }}
                                                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
@@ -702,9 +702,9 @@ export default function AdminDashboardPage() {
                     }
                     const data = await response.json();
                     // --- LOGGING --- 
-                    console.log("API Response Data:", data); // Log the raw response
+                    // console.log("API Response Data:", data); // Log the raw response
                     if (data.shipments && data.shipments.length > 0) {
-                        console.log("First Shipment Object:", data.shipments[0]); // Log the first shipment
+                        // console.log("First Shipment Object:", data.shipments[0]); // Log the first shipment
                     }
                     // ---------------
                     setShipments(data.shipments || []);
@@ -1071,7 +1071,7 @@ export default function AdminDashboardPage() {
                                                                     onClick={(e) => { e.stopPropagation(); handleViewSignature(shipment.recipientSignature!); }}
                                                                     title="View Signature"
                                                                 >
-                                                                    <IconEye className="h-4 w-4 text-muted-foreground" />
+                                                                    <IconSignature className="h-4 w-4 text-muted-foreground" />
                                                                 </Button>
                                                             )}
                                                         </div>

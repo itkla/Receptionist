@@ -90,17 +90,17 @@ export const DesktopSidebar = ({
 }: React.ComponentProps<typeof motion.div>) => {
   const { open, animate, isHovering, setIsHovering } = useSidebar();
   
-  const targetWidth = open ? "300px" : isHovering ? "300px" : "60px";
+  const targetWidth = open ? "200px" : isHovering ? "200px" : "60px";
 
   return (
     <>
       <motion.div
         className={cn(
-          "h-full px-4 py-4 hidden  md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] shrink-0",
+          "h-full px-4 py-4 hidden  md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[200px] shrink-0",
           className
         )}
         animate={{
-          width: animate ? targetWidth : (open ? "300px" : "60px"),
+          width: animate ? targetWidth : (open ? "200px" : "60px"),
         }}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}

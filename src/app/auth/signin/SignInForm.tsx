@@ -67,7 +67,7 @@ export default function SignInForm() { // Renamed component
         <div className="mb-8">
             <Logo />
         </div>
-        <Card className="w-full max-w-sm">
+        <Card className="w-full max-w-sm border-none shadow-none drop-shadow-xl">
             <CardHeader>
                 <CardTitle className="text-2xl font-bold text-center">Sign In</CardTitle>
                 <CardDescription className="text-center">Enter your credentials to access the dashboard.</CardDescription>
