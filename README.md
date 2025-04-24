@@ -82,7 +82,7 @@ Follow these steps to set up the project locally:
     # or npm run dev / yarn dev
     ```
 
-7.  Open [http://localhost:3000](http://localhost:3000) in your browser. If it's the first run and no users exist, you might be redirected to `/setup-admin` (if that feature is implemented) or need to create an initial user manually or via seeding (if applicable).
+7.  Open [http://localhost:3000](http://localhost:3000) in your browser. If it's the first run and no users exist, you might be redirected to `/setup-admin` or need to create an initial user manually (via cli.ts) or via seeding.
 
 ## API Route Documentation
 
