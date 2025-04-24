@@ -2,10 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-// NOTE: Direct prisma client usage in client components is generally discouraged.
-// Move fetching to an API Route or Server Component for production.
-// import { prisma } from '@/lib/prisma';
-import { Shipment, Device, Location, ShipmentStatus } from '@prisma/client'; // Import types
+import { Shipment, Device, Location, ShipmentStatus } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
@@ -15,25 +12,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { IconLoader2, IconArrowLeft, IconEdit, IconDeviceDesktop, IconMapPin, IconUser, IconSignature, IconFileDescription } from '@tabler/icons-react';
 import { format } from 'date-fns';
-import { getStatusBadgeVariant, cn } from '@/lib/utils'; // Assuming you have this utility
+import { getStatusBadgeVariant, cn } from '@/lib/utils';
 import { toast } from "sonner";
 import { Toaster as SonnerToaster } from "sonner";
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-// Define a more detailed type for the page data
-// NOTE: Adjust this based on the actual data structure returned by your API
 type ShipmentDetail = Shipment & {
     devices: Device[];
     location: Location | null;
 };
 
-// Form data state type
 interface ShipmentFormData {
     senderName: string;
     senderEmail: string;
     status: ShipmentStatus;
-    // Add other editable fields here if needed (e.g., trackingId)
 }
 
 export default function ShipmentDetailPage() {
@@ -57,7 +50,7 @@ export default function ShipmentDetailPage() {
             setError(null);
             try {
                 // Fetch from an API route instead of direct client access
-                const response = await fetch(`/api/shipments/${shortId.toUpperCase()}`); // Use shortId
+                const response = await fetch(`/api/shipments/${shortId.toUpperCase()}`);
                 if (!response.ok) {
                     if (response.status === 404) {
                          setError('Shipment not found.');
@@ -129,7 +122,7 @@ export default function ShipmentDetailPage() {
                  throw new Error(result.error || `Failed to save changes (HTTP ${response.status})`);
              }
 
-             setShipment(result); // Update local state with saved data
+             setShipment(result);
              setIsEditing(false);
              toast.success("Shipment updated successfully!", { id: toastId });
 
@@ -140,7 +133,6 @@ export default function ShipmentDetailPage() {
              setIsSaving(false);
         }
     };
-    // ------------------------------------->
 
     if (isLoading) {
         return <div className="flex justify-center items-center h-screen"><IconLoader2 className="animate-spin h-8 w-8" /></div>;
@@ -158,11 +150,9 @@ export default function ShipmentDetailPage() {
     }
 
     if (!shipment) {
-        // This case might be covered by error state if fetch fails, but good as a fallback
         return <div className="flex justify-center items-center h-screen text-muted-foreground">Shipment data could not be loaded.</div>;
     }
 
-    // --- Render Shipment Details (Read-only for now) ---
     return (
         <div className="container mx-auto p-4 md:p-8 max-w-4xl">
             <SonnerToaster richColors position="top-right"/>
@@ -179,7 +169,7 @@ export default function ShipmentDetailPage() {
                             alt="Recipient Signature"
                             width={350}
                             height={175}
-                            className="mx-auto border rounded bg-white" // Add white background
+                            className="mx-auto border rounded bg-white"
                         />
                     ) : (
                         <p className="text-center text-muted-foreground">No signature captured.</p>
@@ -235,7 +225,6 @@ export default function ShipmentDetailPage() {
                                      </SelectContent>
                                  </Select>
                              </div>
-                             {/* Add other editable fields here (e.g., Tracking ID) */}
 
                             <div className="flex justify-end space-x-2 mt-4">
                                 <Button variant="outline" onClick={handleEditToggle} disabled={isSaving}>Cancel</Button>
@@ -269,7 +258,6 @@ export default function ShipmentDetailPage() {
                                     <a href={shipment.manifestUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-600 hover:underline">View PDF</a>
                                 </div>
                              )}
-                            {/* Add Tracking ID display if exists */} 
                             {shipment.trackingId && <div><strong className="font-medium">Tracking ID:</strong> {shipment.trackingId}</div>}
                          </div>
                      )}

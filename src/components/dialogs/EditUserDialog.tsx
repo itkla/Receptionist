@@ -15,9 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconLoader2 } from '@tabler/icons-react';
 import { toast } from "sonner";
-import { UserData } from '@/app/users/page'; // Import the UserData interface
+import { UserData } from '@/app/users/page';
 
-// Extend UserData locally if needed for fields not fetched by default
 interface EditableUserData extends UserData {
     notificationsEnabled?: boolean; // Add optional field
 }

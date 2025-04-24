@@ -63,7 +63,6 @@ export const NewShipmentNotification: React.FC<NewShipmentNotificationProps> = (
                     {/* Logo and Title */}
                     <Row style={{ marginBottom: '20px'}}>
                         <Column style={{ width: '40px' }}>
-                           {/* You might need to host the logo publicly or embed as base64 for email */}
                            {/* <Img src={`${baseUrl}/images/receptionist_logo.png`} width="32" height="32" alt="Logo" /> */}
                         </Column>
                         <Column>

@@ -33,9 +33,6 @@ export async function authenticateClientApiKey(request: Request): Promise<ApiKey
     const providedKey = apiKeyHeader; 
 
     try {
-        // Fetch all active API key hashes from the database
-        // Comparing hashes requires fetching them first.
-        // Consider adding an index to keyHash if performance becomes an issue.
         const activeApiKeys = await prisma.apiKey.findMany({
             where: { isActive: true }
             // Selects all fields by default, including description and keyHash

@@ -1,25 +1,23 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { Shipment, Device, Location, ShipmentStatus } from '@prisma/client';
-import { format } from 'date-fns'; // Or your preferred date formatting library
+import { format } from 'date-fns';
 
 // --- Types --- 
-// Define a base type that matches the structure expected by the component
-// including potential nulls based on usage patterns
 interface PdfShipmentData {
     id: string;
     shortId: string;
-    status: ShipmentStatus; // Use enum for status
-    createdAt: Date | string; // Allow string or Date
+    status: ShipmentStatus;
+    createdAt: Date | string;
     updatedAt: Date | string;
     senderName: string;
     senderEmail: string;
-    locationId: string | null; // Allow null
+    locationId: string | null;
     location: Location | null;
     recipientName?: string | null;
     recipientEmail?: string | null;
     recipientSignature?: string | null;
-    receivedAt?: Date | string | null; // Allow string or Date
+    receivedAt?: Date | string | null;
     devices: Device[];
     trackingNumber?: string | null;
     trackingId?: string | null;
@@ -31,80 +29,67 @@ type ShipmentManifestData = PdfShipmentData;
 
 interface ShipmentManifestPDFProps {
     shipment: ShipmentManifestData;
-    qrDataUrl: string | null; // Expect the generated Data URL or null
+    qrDataUrl: string | null;
 }
-
-// --- Styling --- 
-// Register fonts if needed (example)
-// Font.register({
-//   family: 'Inter', 
-//   fonts: [
-//     { src: '/path/to/Inter-Regular.ttf' }, // Provide paths to font files
-//     { src: '/path/to/Inter-Bold.ttf', fontWeight: 'bold' },
-//   ]
-// });
 
 const styles = StyleSheet.create({
     page: {
         flexDirection: 'column',
         backgroundColor: '#FFFFFF',
-        padding: 40, // Increased padding for more whitespace
-        // fontFamily: 'Inter', // Apply registered font
-        fontSize: 9, // Slightly smaller base font size
+        padding: 40,
+        fontSize: 9,
         color: '#222',
     },
     header: {
-        fontSize: 20, // Larger header
+        fontSize: 20,
         fontWeight: 'bold',
         marginBottom: 25,
-        textAlign: 'left', // Left align header
+        textAlign: 'left',
         color: '#000',
     },
     twoColumnLayout: {
         flexDirection: 'row',
         marginBottom: 20,
-        gap: 20, // Add gap between columns
+        gap: 20,
     },
     leftColumn: {
-        width: '60%', // Adjust width as needed
+        width: '60%',
         flexDirection: 'column',
     },
     rightColumn: {
-        width: '40%', // Adjust width as needed
+        width: '40%',
         flexDirection: 'column',
-        alignItems: 'center', // Center QR code horizontally
-        justifyContent: 'flex-start', // Align QR code to top
-        paddingTop: 10, // Add some padding above QR code
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: 10,
     },
     qrCodeContainer: {
-         // Add border or background if desired
          // borderWidth: 1,
          // borderColor: '#eee',
          // padding: 10,
     },
     section: {
-        marginBottom: 20, // Increased space between sections
+        marginBottom: 20,
     },
     sectionTitle: {
-        fontSize: 12, // Slightly smaller section title
+        fontSize: 12,
         fontWeight: 'bold',
-        marginBottom: 10, // More space after title
-        // Removed borderBottomWidth
+        marginBottom: 10,
         paddingBottom: 0, 
         color: '#444',
-        textAlign: 'left', // Ensure left alignment
+        textAlign: 'left',
     },
     detailRow: {
         flexDirection: 'row',
-        marginBottom: 5, // Increased spacing
+        marginBottom: 5,
     },
     detailLabel: {
         fontWeight: 'bold',
-        width: 85, // Slightly adjusted width
+        width: 85,
     },
     detailValue: {
         flexGrow: 1,
-        flexShrink: 1, // Allow text to wrap
+        flexShrink: 1,
     },
     table: {
         width: 'auto',
@@ -117,8 +102,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         minHeight: 20,
         paddingVertical: 4, // Add vertical padding for row spacing
-        // Add alternating background for readability if desired
-        // backgroundColor: index % 2 === 0 ? '#f9f9f9' : '#ffffff',
     },
     tableColHeader: {
         backgroundColor: 'transparent', // Removed header background
@@ -167,12 +150,10 @@ export const ShipmentManifestPDF: React.FC<ShipmentManifestPDFProps> = ({ shipme
             <Page size="A4" style={styles.page}>
                 {/* Header Section */}
                 {/* Wrap Image and Text in a View with row direction */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 25 /* Adjust spacing as needed */ }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 25 }}>
                     <Image src='/receptionist_logo.png' style={{ width: 25, height: 25, marginRight: 8 /* Space between image and text */ }} /> 
                     <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#000' }}>Receptionist</Text>
                 </View>
-                
-                {/* Original Header Text - You might want to remove or adjust this if the logo serves as the header */}
                 <Text style={styles.header}>Shipment Manifest</Text> 
 
                 {/* Two Column Layout */}

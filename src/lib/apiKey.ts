@@ -2,11 +2,6 @@
 
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
-// Remove Node.js crypto import
-// import { randomBytes } from 'crypto';
-// Import webcrypto for Node.js compatibility if needed/preferred
-// Although crypto.getRandomValues is often globally available
-// import { webcrypto } from 'crypto'; 
 
 const SALT_ROUNDS = 10;
 
@@ -16,20 +11,17 @@ const SALT_ROUNDS = 10;
  * @returns Promise resolving to { apiKey: string, keyHash: string }
  */
 export async function generateApiKey(description?: string): Promise<{ apiKey: string; keyHash: string }> {
-  // Generate 32 random bytes using the Web Crypto API
-  const randomBytesArray = new Uint8Array(32);
-  // Use global crypto object available in Node, Edge, and Browsers
-  globalThis.crypto.getRandomValues(randomBytesArray);
+    // Generate 32 random bytes using the Web Crypto API
+    const randomBytesArray = new Uint8Array(32);
+    // Use global crypto object available in Node, Edge, and Browsers
+    globalThis.crypto.getRandomValues(randomBytesArray);
 
-  // Convert the bytes to a hex string
-  const apiKey = Array.from(randomBytesArray).map(b => b.toString(16).padStart(2, '0')).join('');
+    // Convert the bytes to a hex string
+    const apiKey = Array.from(randomBytesArray).map(b => b.toString(16).padStart(2, '0')).join('');
 
-  const keyHash = await bcrypt.hash(apiKey, SALT_ROUNDS);
+    const keyHash = await bcrypt.hash(apiKey, SALT_ROUNDS);
 
-  // Store the hash in the database (do this in the API route/admin panel)
-  // await prisma.apiKey.create({ data: { keyHash, description } });
-
-  return { apiKey, keyHash };
+    return { apiKey, keyHash };
 }
 
 /**
@@ -38,24 +30,24 @@ export async function generateApiKey(description?: string): Promise<{ apiKey: st
  * @returns Promise resolving to the active ApiKey object if valid, otherwise null.
  */
 export async function validateApiKey(plainTextKey: string): Promise<{ id: string; description: string | null } | null> {
-  if (!plainTextKey) {
-    return null;
-  }
-
-  // Fetch all active API key hashes using standard camelCase
-  const activeKeys = await prisma.apiKey.findMany({
-    where: { isActive: true },
-    select: { id: true, keyHash: true, description: true },
-  });
-
-  for (const keyRecord of activeKeys) {
-    const isValid = await bcrypt.compare(plainTextKey, keyRecord.keyHash);
-    if (isValid) {
-      // Optional: Update lastUsedAt using standard camelCase
-      prisma.apiKey.update({ where: { id: keyRecord.id }, data: { lastUsedAt: new Date() } }).catch(console.error);
-      return { id: keyRecord.id, description: keyRecord.description };
+    if (!plainTextKey) {
+        return null;
     }
-  }
 
-  return null; // No valid key found
+    // Fetch all active API key hashes using standard camelCase
+    const activeKeys = await prisma.apiKey.findMany({
+        where: { isActive: true },
+        select: { id: true, keyHash: true, description: true },
+    });
+
+    for (const keyRecord of activeKeys) {
+        const isValid = await bcrypt.compare(plainTextKey, keyRecord.keyHash);
+        if (isValid) {
+            // Optional: Update lastUsedAt using standard camelCase
+            prisma.apiKey.update({ where: { id: keyRecord.id }, data: { lastUsedAt: new Date() } }).catch(console.error);
+            return { id: keyRecord.id, description: keyRecord.description };
+        }
+    }
+
+    return null; // No valid key found
 } 

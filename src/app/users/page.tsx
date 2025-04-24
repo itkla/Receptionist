@@ -1,4 +1,4 @@
-'use client'; // Make this a client component
+'use client';
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from 'next/navigation';
@@ -46,28 +46,25 @@ import {
 import { format } from 'date-fns';
 import { toast } from "sonner";
 
-// Keep UserData type definition
 export interface UserData {
     id: string;
     name: string | null;
     email: string | null;
     createdAt: Date;
-    notificationsEnabled?: boolean; // Keep optional field if used in EditDialog fetch
+    notificationsEnabled?: boolean;
 }
 
 export default function UserManagementPage() {
-    // Client-side state
     const [users, setUsers] = useState<UserData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false); // State for delete dialog
-    const [userToDelete, setUserToDelete] = useState<UserData | null>(null); // State for user to delete
-    const [isDeleting, setIsDeleting] = useState(false); // State for delete operation
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     const router = useRouter();
 
-    // Define fetchUsers outside useEffect, wrapped in useCallback
     const fetchUsers = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -85,12 +82,10 @@ export default function UserManagementPage() {
         }
     }, []);
 
-    // Call fetchUsers on mount
     useEffect(() => {
         fetchUsers();
     }, [fetchUsers]);
 
-    // Handler for when a user is added or updated
     const handleUserChange = useCallback(() => {
         setIsAddDialogOpen(false);
         setIsEditDialogOpen(false);
@@ -98,19 +93,16 @@ export default function UserManagementPage() {
         fetchUsers();
     }, [fetchUsers]);
 
-    // Handler for opening edit dialog
     const handleEditClick = (user: UserData) => {
         setSelectedUser(user);
         setIsEditDialogOpen(true);
     };
 
-    // Handler for opening delete confirmation
     const handleDeleteClick = (user: UserData) => {
         setUserToDelete(user);
         setIsDeleteDialogOpen(true);
     };
 
-    // Handler for confirming deletion
     const handleDeleteConfirm = async () => {
         if (!userToDelete) return;
 
@@ -130,9 +122,9 @@ export default function UserManagementPage() {
             }
 
             toast.success("User deleted successfully!", { id: toastId });
-            setIsDeleteDialogOpen(false); // Close confirmation dialog
-            setUserToDelete(null); // Clear user to delete
-            fetchUsers(); // Refresh list
+            setIsDeleteDialogOpen(false);
+            setUserToDelete(null);
+            fetchUsers();
 
         } catch (err: any) {
             console.error("Error deleting user:", err);
@@ -253,7 +245,7 @@ export default function UserManagementPage() {
                                             <DropdownMenuItem 
                                                 onClick={() => handleDeleteClick(user)} 
                                                 className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                                disabled={isDeleting} // Optionally disable while deleting
+                                                disabled={isDeleting}
                                             >
                                                 <IconTrash className="mr-2 h-4 w-4" /> Delete
                                             </DropdownMenuItem>

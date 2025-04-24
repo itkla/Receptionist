@@ -112,6 +112,3 @@ const listItem = {
     color: '#374151',
     marginBottom: '5px',
 };
-
-// --- Copy necessary base styles from NewShipmentNotification --- 
-// (Ensure all referenced styles like main, container, heading, etc. are defined here) 

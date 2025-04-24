@@ -18,40 +18,35 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { BrowserMultiFormatReader, Result, NotFoundException, ChecksumException, FormatException } from '@zxing/library';
 import { motion, useAnimation, useMotionValue, useTransform, animate, useDragControls } from 'framer-motion';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-
-// --- Types --- Using Prisma types directly where possible
 import { Device as PrismaDevice, Shipment as PrismaShipment, ShipmentStatus } from '@prisma/client';
 
-// Type for the data fetched from the public API
 type PublicShipmentData = Pick<PrismaShipment, 'id' | 'shortId' | 'senderName' | 'createdAt' | 'status'> & {
     devices: Pick<PrismaDevice, 'id' | 'serialNumber' | 'assetTag' | 'model' | 'isCheckedIn'>[];
-    location?: { name: string } | null; // Optional location info
+    location?: { name: string } | null;
 };
 
-// Type for devices added manually (not on manifest)
 interface ExtraDeviceInput {
-    id: string; // Client-side temporary ID for list key
+    id: string;
     serialNumber: string;
     assetTag?: string;
-    model?: string; // Renamed from description for consistency
+    model?: string;
 }
 
-// Helper to obfuscate serial number
 const obfuscateSerial = (serial: string | null | undefined, keepLast = 4): string => {
     if (!serial) return 'N/A';
-    if (serial.length <= keepLast) return serial; // Don't obfuscate if too short
+    if (serial.length <= keepLast) return serial;
     return `${'*'.repeat(serial.length - keepLast)}${serial.slice(-keepLast)}`;
 };
 
 // --- Core Scanner Component using @zxing/library --- 
-// Define types for overlay data
 type OverlayDataType = { serial: string; id: number };
+
+type InteractionStateType = 'idle' | 'swiping' | 'submitting' | 'success' | 'error' | 'alreadyReceived';
 
 interface CoreScannerProps {
     onResult: (result: string | null) => void;
     onClose: () => void;
-    isEnabled: boolean; // To control when the scanner is active
-    // Expose trigger functions via ref
+    isEnabled: boolean;
     scannerActionTriggerRef?: React.RefObject<{
         triggerSuccess: (serial: string) => void;
         triggerUnknown: (serial: string) => void;
@@ -73,7 +68,6 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
     const [alreadyScannedOverlayData, setAlreadyScannedOverlayData] = useState<OverlayDataType | null>(null);
     const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Effect for camera setup/teardown
     useEffect(() => {
         console.log(`Scanner Effect: isEnabled changed to ${isEnabled}`);
         const reader = readerRef.current;
@@ -201,7 +195,6 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
 
     }, [isEnabled, onResult, successOverlayData, unknownOverlayData, alreadyScannedOverlayData]);
 
-    // Expose trigger functions via ref
     useEffect(() => {
         console.log('[CoreScannerComponent] Ref Setup Effect Running. Ref defined:', !!scannerActionTriggerRef);
         if (scannerActionTriggerRef && typeof scannerActionTriggerRef === 'object') {
@@ -236,9 +229,7 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
         };
     }, [scannerActionTriggerRef]);
 
-    // Effect to clear overlays after a delay
     useEffect(() => {
-        // Combine all overlay states to check if *any* overlay is active
         const currentOverlay = successOverlayData || unknownOverlayData || alreadyScannedOverlayData;
         if (currentOverlay) {
             console.log(`[CoreScannerComponent] Overlay Clear Effect: Starting 3s timeout for ${currentOverlay.serial}`);
@@ -250,7 +241,7 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
                 setSuccessOverlayData(null);
                 setUnknownOverlayData(null);
                 setAlreadyScannedOverlayData(null);
-            }, 3000); // Reduced timeout to 3 seconds
+            }, 3000);
         }
         return () => {
             if (overlayTimeoutRef.current) {
@@ -264,10 +255,9 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
     return (
         <div className="relative aspect-square w-full overflow-hidden rounded-md border bg-muted">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline />
-            {/* Success Overlay */}
             {successOverlayData && (
                 <motion.div
-                    key={`success-${successOverlayData.id}`} // Unique key
+                    key={`success-${successOverlayData.id}`}
                     className="absolute inset-0 flex flex-col items-center justify-center bg-green-500/90 text-white pointer-events-none z-10" // Added z-10
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -278,10 +268,9 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
                     <p className="mt-2 font-semibold text-lg break-all px-4">{successOverlayData.serial}</p>
                 </motion.div>
             )}
-            {/* Unknown Overlay */}
             {unknownOverlayData && (
                 <motion.div
-                    key={`unknown-${unknownOverlayData.id}`} // Unique key
+                    key={`unknown-${unknownOverlayData.id}`}
                     className="absolute inset-0 flex flex-col items-center justify-center bg-orange-500/90 text-white pointer-events-none z-10" // Added z-10
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -292,7 +281,6 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
                     <p className="mt-2 font-semibold text-lg break-all px-4">Unknown: {unknownOverlayData.serial}</p>
                 </motion.div>
             )}
-            {/* Already Scanned Overlay (New) */}
             {alreadyScannedOverlayData && (
                 <motion.div
                     key={`already-${alreadyScannedOverlayData.id}`}
@@ -316,13 +304,8 @@ const CoreScannerComponent: React.FC<CoreScannerProps> = ({
         </div>
     );
 };
-// -----------------------------------------------------
-
-// --- New Interaction State Type ---
-type InteractionStateType = 'idle' | 'swiping' | 'submitting' | 'success' | 'error' | 'alreadyReceived';
 
 export default function ShipmentReceivePage() {
-    // --- All State and Hook Declarations First --- 
     const params = useParams();
     const shortId = params?.shortId as string | undefined;
     const signaturePadRef = useRef<SignatureCanvas>(null);
@@ -352,16 +335,8 @@ export default function ShipmentReceivePage() {
         triggerUnknown: (serial: string) => void;
         triggerAlreadyScanned: (serial: string) => void;
     } | null>(null);
-
-    // --- Transformations for background text (optional - maybe remove if background is static?) ---
-    // These might feel disconnected now. Consider removing or basing on cardY.
-    // const backgroundTextOpacity = useTransform(cardY, [0, -100], [1, 0]); 
-    // const backgroundTextY = useTransform(cardY, [0, -100], [0, -20]); 
-
-    // --- Define Can Submit Logic Early --- 
     const canSubmit = !isSubmitting && recipientName.trim() && isSigned && !submissionSuccess;
 
-    // --- Moved useEffect for Initial State Setting --- 
     useEffect(() => {
         if (shipment) {
             if (submissionSuccess) {
@@ -376,8 +351,6 @@ export default function ShipmentReceivePage() {
         }
     }, [shipment, submissionSuccess]);
 
-    // --- Fetch Data useEffect --- 
-    // (This was already near the top, which is good)
     useEffect(() => {
         if (!shortId) {
             setError('Shipment ID not found in URL.');
@@ -394,7 +367,6 @@ export default function ShipmentReceivePage() {
                     throw new Error(data.error || `Error fetching shipment (HTTP ${response.status})`);
                 }
                 setShipment(data);
-                // Pre-check items already marked as received (if API provides isCheckedIn)
                 const preChecked = new Set<string>();
                 data.devices?.forEach((device: any) => {
                     if (device.isCheckedIn) {
@@ -412,11 +384,7 @@ export default function ShipmentReceivePage() {
         };
         fetchShipmentDetails();
     }, [shortId]);
-
-    // --- All useCallback Hooks --- 
-    // (Ensure these are also before conditional returns)
     const handleDeviceToggle = useCallback((serialNumber: string) => {
-        // This function ONLY toggles state. Toasts are handled by caller (manual click or scan result)
         console.log(`handleDeviceToggle called for: ${serialNumber}`);
         setReceivedSerials(prev => {
             const newSet = new Set(prev);
@@ -697,7 +665,6 @@ export default function ShipmentReceivePage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-            {/* ------------------ */}
 
             {/* --- Add Extra Device Modal --- */}
             <Dialog open={isExtraDeviceModalOpen} onOpenChange={setIsExtraDeviceModalOpen}>
@@ -727,7 +694,6 @@ export default function ShipmentReceivePage() {
                     </form>
                 </DialogContent>
             </Dialog>
-            {/* ----------------------------- */}
 
             {/* --- Full Screen Background Color Layer --- */}
             <motion.div

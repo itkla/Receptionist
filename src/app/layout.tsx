@@ -31,7 +31,6 @@ export default function RootLayout({
          >
            <SessionProviderWrapper>
               {children}
-              {/* Consider moving Toaster here if needed globally */}
            </SessionProviderWrapper>
          </ThemeProvider>
         <Toaster richColors position="bottom-right" />

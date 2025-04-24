@@ -64,11 +64,11 @@ import { format } from 'date-fns';
 import { ModeToggle } from "@/components/theme-toggle";
 import { Logo, LogoIcon } from "@/components/layout/logos";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShipmentStatus, Shipment as PrismaShipment, Device as PrismaDevice, Location as PrismaLocation } from "@prisma/client"; // Import Prisma types with aliases
-import { useDebounce } from "@/hooks/useDebounce"; // Import debounce hook
+import { ShipmentStatus, Shipment as PrismaShipment, Device as PrismaDevice, Location as PrismaLocation } from "@prisma/client";
+import { useDebounce } from "@/hooks/useDebounce";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStatusBadgeVariant } from '@/lib/utils';
 import { PDFDownloadLink } from '@react-pdf/renderer';
@@ -92,16 +92,14 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSession } from "next-auth/react"; // Import useSession
+import { useSession } from "next-auth/react";
 
-// Type for sorting state
 type SortDirection = 'asc' | 'desc';
 type SortableShipmentKeys = 'shortId' | 'status' | 'createdAt';
 
 // Special value constant removed, no longer needed for Select
 // const ALL_STATUSES_VALUE = "__ALL__";
 
-// Define a more detailed type for the page data
 type ShipmentDetail = PrismaShipment & {
     devices: PrismaDevice[];
     location: PrismaLocation | null;
@@ -114,7 +112,6 @@ type ShipmentDetail = PrismaShipment & {
     clientReferenceId?: string | null;
 };
 
-// Form data state type
 interface ShipmentFormData {
     senderName: string;
     senderEmail: string;
@@ -123,23 +120,21 @@ interface ShipmentFormData {
     notifyEmails: string;
     notes: string | null;
     clientReferenceId: string | null;
-    // Add other editable fields here if needed (e.g., trackingId)
 }
 
 interface ShipmentDetailModalProps {
     shortId: string | null;
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
-    onShipmentUpdate: () => void; // Callback to refresh dashboard list
-    currentUser?: { name?: string | null; email?: string | null }; // Add currentUser prop
+    onShipmentUpdate: () => void;
+    currentUser?: { name?: string | null; email?: string | null };
 }
 
-// Re-introduce DeviceInput for the form state
 interface DeviceInput {
-    id: string; // Keep client-side ID for mapping keys
-  serialNumber: string;
-  assetTag: string;
-  model: string;
+    id: string;
+    serialNumber: string;
+    assetTag: string;
+    model: string;
 }
 
 const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOpen, onOpenChange, onShipmentUpdate, currentUser }) => {
@@ -154,19 +149,16 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Reset state when modal closes or shortId changes
     useEffect(() => {
         if (!isOpen) {
-            // Delay resetting state slightly to allow modal fade-out animation
             const timer = setTimeout(() => {
                 setShipment(null);
                 setError(null);
                 setIsLoading(false);
                 setIsEditing(false);
                 setIsSaving(false);
-                // Reset form data WITHOUT current user info here, it will be populated when opened again
                 setFormData({ senderName: '', senderEmail: '', status: ShipmentStatus.PENDING, trackingNumber: null, notifyEmails: '', notes: null, clientReferenceId: null });
-                setQrCodeDataUrl(null); // Reset QR code state
+                setQrCodeDataUrl(null);
                 setIsDeleteDialogOpen(false);
                 setIsDeleting(false);
             }, 300);
@@ -179,8 +171,8 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
             const fetchAndPrepareData = async () => {
                 setIsLoading(true);
                 setError(null);
-                setIsEditing(false); // Ensure edit mode is off when loading new data
-                setQrCodeDataUrl(null); // Clear previous QR code
+                setIsEditing(false);
+                setQrCodeDataUrl(null);
                 try {
                     const response = await fetch(`/api/shipments/${shortId.toUpperCase()}`, { credentials: 'include' });
                     if (!response.ok) {
@@ -190,7 +182,6 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                     } else {
                         const data = await response.json();
                         setShipment(data as ShipmentDetail);
-                        // Pre-populate form data: use fetched data first, then current user, then empty string
                         setFormData({
                             senderName: data.senderName || currentUser?.name || '',
                             senderEmail: data.senderEmail || currentUser?.email || '',
@@ -201,7 +192,6 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                             clientReferenceId: data.clientReferenceId || null,
                         });
 
-                        // --- Generate QR Code Data URL --- 
                         if (typeof window !== 'undefined') {
                             const baseUrl = window.location.origin;
                             const receiveUrl = `${baseUrl}/receive/${data.shortId}`;
@@ -214,10 +204,8 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                                 console.log("QR Code URL generated for modal.");
                             } catch (qrErr) {
                                 console.error("Failed to generate QR code for modal:", qrErr);
-                                // Optionally set an error state to disable the link
                             }
                         }
-                        // --- End QR Code Generation ---
                     }
                 } catch (err: any) {
                     console.error("Error fetching shipment details:", err);
@@ -230,7 +218,6 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
         }
     }, [shortId, isOpen, currentUser]);
 
-    // --- Edit Handlers (copy from previous page.tsx logic) --- 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         if (name === 'trackingNumber' || name === 'notes' || name === 'clientReferenceId') {
@@ -263,29 +250,27 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
         const toastId = `save-shipment-${shortId}`;
         toast.loading("Saving changes...", { id: toastId });
         try {
-            // Parse the comma-separated string back into an array
             const emailsToSend = formData.notifyEmails.split(',')
                 .map(e => e.trim())
-                .filter(e => e !== ''); // Remove empty strings
+                .filter(e => e !== '');
 
             const payload = {
                 ...formData,
-                notifyEmails: emailsToSend // Send the parsed array
+                notifyEmails: emailsToSend
             };
 
             const response = await fetch(`/api/shipments/${shortId!.toUpperCase()}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload) // Send payload including parsed emails
+                body: JSON.stringify(payload)
             });
             const result = await response.json();
             if (!response.ok) { throw new Error(result.error || `Failed to save changes (HTTP ${response.status})`); }
 
-            // Update local state with the full response (which now includes notifyEmails array)
             setShipment(result as ShipmentDetail);
             setIsEditing(false);
             toast.success("Shipment updated successfully!", { id: toastId });
-            onShipmentUpdate(); // Refresh dashboard list
+            onShipmentUpdate();
         } catch (err: any) {
             console.error("Error saving shipment:", err);
             toast.error("Save Failed", { description: err.message, id: toastId });
@@ -293,9 +278,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
             setIsSaving(false);
         }
     };
-    // ------------------------------------->
 
-    // --- Delete Handler ---
     const handleDelete = async () => {
         if (!shortId) return;
         setIsDeleting(true);
@@ -312,9 +295,9 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
             }
 
             toast.success("Shipment deleted successfully!", { id: toastId });
-            setIsDeleteDialogOpen(false); // Close confirmation dialog
-            onOpenChange(false); // Close detail modal
-            onShipmentUpdate(); // Refresh dashboard list
+            setIsDeleteDialogOpen(false);
+            onOpenChange(false);
+            onShipmentUpdate();
 
         } catch (err: any) {
             console.error("Error deleting shipment:", err);
@@ -335,57 +318,52 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
             return <div className="flex justify-center items-center h-48 text-muted-foreground">Shipment data could not be loaded.</div>;
         }
 
-        // --- Main Detail View UI (Copy structure from previous page.tsx) --- 
         return (
             <div className="space-y-6">
-                {/* Card for Main Details + Edit Form */}
                 <Card className="border-none">
                     <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                         <div>
-                            {/* Title remains the same */}
                             <CardTitle className="text-xl font-bold">Shipment {shipment.shortId}</CardTitle>
                             <CardDescription>Details and associated devices.</CardDescription>
                         </div>
                         <div className="flex items-center space-x-1">
-                             {/* Edit/Cancel Button */}
-                             {isEditing ? (
-                                 <Button variant="secondary" size="sm" onClick={handleEditToggle} disabled={isSaving}>Cancel</Button>
-                             ) : (
+                            {isEditing ? (
+                                <Button variant="secondary" size="sm" onClick={handleEditToggle} disabled={isSaving}>Cancel</Button>
+                            ) : (
                                 <Button variant="outline" size="sm" onClick={handleEditToggle} disabled={isSaving}>Edit</Button>
-                             )}
+                            )}
 
-                             {/* Context Menu (only when not editing) */}
-                             {!isEditing && (
-                                 <>
-                                     {/* TEMPORARY TEST BUTTON */}
-                                     {/* <Button variant="secondary" size="sm" onClick={() => { console.log('TEMP BTN CLICKED'); setIsDeleteDialogOpen(true); }}>Test Delete Dialog</Button> */}
-                                     
-                                     <DropdownMenu>
-                                         <DropdownMenuTrigger asChild>
-                                             <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isDeleting}>
-                                                 <IconDotsVertical className="h-4 w-4" />
-                                                 <span className="sr-only">More actions</span>
-                                             </Button>
-                                         </DropdownMenuTrigger>
-                                         <DropdownMenuContent align="end">
-                                             <DropdownMenuItem 
-                                                 onClick={(e) => { 
-                                                     e.preventDefault(); 
+                            {!isEditing && (
+                                <>
+                                    {/* TEMPORARY TEST BUTTON */}
+                                    {/* <Button variant="secondary" size="sm" onClick={() => { console.log('TEMP BTN CLICKED'); setIsDeleteDialogOpen(true); }}>Test Delete Dialog</Button> */}
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isDeleting}>
+                                                <IconDotsVertical className="h-4 w-4" />
+                                                <span className="sr-only">More actions</span>
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem
+                                                onClick={(e) => {
+                                                    e.preventDefault();
                                                     //  console.log("Delete menu item CLICKED. Setting delete dialog open."); // Log click
-                                                     setIsDeleteDialogOpen(true); // Open the confirmation dialog
-                                                 }}
-                                                 className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                                                 disabled={isDeleting}
-                                             >
+                                                    setIsDeleteDialogOpen(true);
+                                                }}
+                                                className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                                                disabled={isDeleting}
+                                            >
                                                 {/* Icon temporarily removed for testing */}
                                                 {/* <IconTrash className="h-4 w-4 mr-2 text-destructive focus:text-destructive focus:bg-destructive/10" /> */}
-                                                <IconTrash className="h-4 w-4 mr-2 text-destructive focus:text-destructive focus:bg-destructive/10" />Delete Shipment 
-                                             </DropdownMenuItem>
-                                         </DropdownMenuContent>
-                                     </DropdownMenu>
-                                 </>
-                             )}
-                         </div>
+                                                <IconTrash className="h-4 w-4 mr-2 text-destructive focus:text-destructive focus:bg-destructive/10" />Delete Shipment
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent>
                         {isEditing ? (
@@ -458,9 +436,7 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                     </CardContent>
                 </Card>
 
-                {/* Alert Dialog for Delete Confirmation (Moved Outside Conditional Rendering) */}
                 <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                    {/* Optional: Keep trigger if needed for accessibility, otherwise remove */}
                     {/* <AlertDialogTrigger asChild><button className="hidden">Hidden Trigger</button></AlertDialogTrigger> */}
                     <AlertDialogContent>
                         <AlertDialogHeader>
@@ -480,27 +456,19 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                     </AlertDialogContent>
                 </AlertDialog>
 
-                {/* Placeholder: Try to parse tracking info for map coordinates */}
                 {!isEditing && shipment?.trackingNumber && (
                     <Card>
                         <CardHeader><CardTitle>Tracking Info</CardTitle></CardHeader>
                         <CardContent>
-                            {/* Placeholder for Map */}
                             <div className="h-60 bg-muted rounded flex items-center justify-center text-muted-foreground">
                                 <span>Map Placeholder (Requires Integration)</span>
                             </div>
-                            {/* Placeholder for Tracking Status Text */}
                             <div className="mt-4 text-sm text-muted-foreground">
-                                {/* Example: Displaying status from trackingInfo JSON */}
-                                {/* Status: { (shipment?.trackingInfo as any)?.status || 'Fetching...' } */}
                                 <p>Status: Fetching tracking data requires API integration.</p>
                             </div>
                         </CardContent>
                     </Card>
                 )}
-                {/* -------------------- */}
-
-                {/* Card for Devices */}
                 <Card>
                     <CardHeader><CardTitle className="flex items-center"><IconDeviceDesktop className="mr-2 h-5 w-5" /> Devices ({shipment.devices.length})</CardTitle></CardHeader>
                     <CardContent>
@@ -514,7 +482,6 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                                         <TableRow key={device.id}>
                                             <TableCell className="font-mono text-xs">
                                                 {device.serialNumber}
-                                                {/* Add indicator for extra devices */}
                                                 {device.isExtraDevice && <Badge variant="outline" className="ml-2 text-xs h-4 px-1 py-0">Extra</Badge>}
                                             </TableCell>
                                             <TableCell>{device.assetTag ?? '-'}</TableCell>
@@ -528,7 +495,6 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
                     </CardContent>
                 </Card>
 
-                {/* Dialog for Signature */}
                 <Dialog open={isSignatureDialogOpen} onOpenChange={setIsSignatureDialogOpen}>
                     <DialogContent>
                         <DialogHeader>
@@ -547,13 +513,10 @@ const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({ shortId, isOp
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
                 <DialogHeader className="flex-shrink-0">
-                    {/* Keep header simple or add title if needed */}
-                    {/* <DialogTitle>Shipment Details</DialogTitle> */}
                 </DialogHeader>
                 <div className="flex-grow overflow-y-auto p-6">
                     {renderContent()}
                 </div>
-                {/* Footer can be added if needed */}
             </DialogContent>
         </Dialog>
     );
@@ -564,9 +527,9 @@ export default function AdminDashboardPage() {
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
-    const [refreshKey, setRefreshKey] = useState(0); // State to trigger refresh
-    const { data: session } = useSession(); // Get session data
-    const currentUser = session?.user; // Extract user data
+    const [refreshKey, setRefreshKey] = useState(0);
+    const { data: session } = useSession();
+    const currentUser = session?.user;
 
     const links = [
         {
@@ -604,41 +567,34 @@ export default function AdminDashboardPage() {
                 <IconLogout2 className="h-5 w-5 shrink-0 text-neutral-700 dark:text-neutral-200" />
             ),
         }
-        
+
     ];
 
     const MainContent = () => {
         const [shipments, setShipments] = useState<ShipmentDetail[]>([]);
         const [isLoadingTable, setIsLoadingTable] = useState(true);
         const [errorTable, setErrorTable] = useState<string | null>(null);
-        // Sorting state
         const [sortColumn, setSortColumn] = useState<SortableShipmentKeys>('createdAt');
         const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-        // Filter state
         const [statusFilter, setStatusFilter] = useState<string>('');
-        // Search state
         const [searchTerm, setSearchTerm] = useState<string>('');
         const [parsedStatusFilter, setParsedStatusFilter] = useState<string>('');
         const [plainSearchText, setPlainSearchText] = useState<string>('');
         const debouncedPlainText = useDebounce(plainSearchText, 300);
-        // Pagination state
         const [currentPage, setCurrentPage] = useState(1);
         const [totalCount, setTotalCount] = useState(0);
-        const itemsPerPage = 15; // Or make this configurable state
+        const itemsPerPage = 15;
         const [selectedSignature, setSelectedSignature] = useState<string | null>(null);
         const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
         const [isVerificationDialogOpen, setIsVerificationDialogOpen] = useState(false);
         const [selectedShipmentForVerification, setSelectedShipmentForVerification] = useState<ShipmentDetail | null>(null);
         const [verifiedDeviceIds, setVerifiedDeviceIds] = useState<Set<string>>(new Set());
         const [isVerifying, setIsVerifying] = useState(false);
-        const router = useRouter(); // Initialize router
+        const router = useRouter();
 
-        // Calculate total pages
         const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-        // Effect to parse searchTerm into status filter and plain text
         useEffect(() => {
-            // Regex to find @status directive (allowing it anywhere initially)
             const statusRegex = /@(\w+)\b/;
             const match = searchTerm.match(statusRegex);
             let currentStatusFilter = '';
@@ -646,33 +602,27 @@ export default function AdminDashboardPage() {
 
             if (match) {
                 const directive = match[1].toUpperCase();
-                const fullDirectiveMatch = match[0]; // e.g., "@pending"
+                const fullDirectiveMatch = match[0];
 
                 if (directive === 'ALL') {
-                    currentStatusFilter = ''; // ALL means no status filter
-                    // Remove the directive part from plain text search if needed
-                    // currentPlainText = searchTerm.replace(fullDirectiveMatch, '').trim();
+                    currentStatusFilter = '';
+
                 } else if (Object.values(ShipmentStatus).includes(directive as ShipmentStatus)) {
-                    currentStatusFilter = directive; // Valid status found
-                    // Remove the directive part from plain text search
+                    currentStatusFilter = directive;
                     currentPlainText = searchTerm.replace(fullDirectiveMatch, '').trim();
                 } else {
-                    // Invalid directive, treat whole string as plain text
                     currentStatusFilter = '';
                     currentPlainText = searchTerm;
                 }
             } else {
-                // No directive found, treat whole string as plain text
                 currentStatusFilter = '';
                 currentPlainText = searchTerm;
             }
 
-            // Update the derived states
-            // DO NOT modify searchTerm here - keep directive visible in input
             setParsedStatusFilter(currentStatusFilter);
             setPlainSearchText(currentPlainText);
 
-        }, [searchTerm]); // Re-parse whenever raw input changes
+        }, [searchTerm]);
 
         // Fetch shipments based on parsed filters and debounced text
         useEffect(() => {
@@ -685,11 +635,9 @@ export default function AdminDashboardPage() {
                 url.searchParams.append('page', currentPage.toString());
                 url.searchParams.append('limit', itemsPerPage.toString());
 
-                // Use parsedStatusFilter for the 'status' param
                 if (parsedStatusFilter) {
                     url.searchParams.append('status', parsedStatusFilter);
                 }
-                // Use debouncedPlainText for the 'search' param
                 if (debouncedPlainText) {
                     url.searchParams.append('search', debouncedPlainText);
                 }
@@ -713,23 +661,20 @@ export default function AdminDashboardPage() {
                     console.error("Error fetching shipments:", err);
                     setErrorTable(err.message || "An unexpected error occurred while fetching shipments.");
                     toast.error("Error Fetching Shipments", { description: err.message });
-                    setShipments([]); // Clear shipments on error
-                    setTotalCount(0); // Reset count on error
+                    setShipments([]);
+                    setTotalCount(0);
                 } finally {
                     setIsLoadingTable(false);
                 }
             };
 
             fetchShipments();
-            // Depend on parsedStatusFilter and debouncedPlainText
         }, [sortColumn, sortDirection, parsedStatusFilter, debouncedPlainText, currentPage, refreshKey]);
 
-        // Reset page to 1 when parsed filters change
         useEffect(() => {
             setCurrentPage(1);
         }, [parsedStatusFilter, debouncedPlainText]);
 
-        // Pagination handlers
         const handleNextPage = () => {
             if (currentPage < totalPages) {
                 setCurrentPage(prev => prev + 1);
@@ -742,20 +687,15 @@ export default function AdminDashboardPage() {
             }
         };
 
-        // handleSort remains the same, it just updates state, triggering the useEffect
         const handleSort = (column: SortableShipmentKeys) => {
             if (sortColumn === column) {
                 setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
             } else {
                 setSortColumn(column);
-                setSortDirection('asc'); // Default to asc when changing column
+                setSortDirection('asc');
             }
         };
 
-        // Remove Memoized sorted shipments - API provides sorted data
-        // const sortedShipments = useMemo(() => { ... }, [shipments, sortColumn, sortDirection]);
-
-        // renderSortIcon remains the same
         const renderSortIcon = (column: SortableShipmentKeys) => {
             if (sortColumn !== column) {
                 return <IconArrowsSort className="ml-2 h-4 w-4 opacity-30" />;
@@ -763,45 +703,39 @@ export default function AdminDashboardPage() {
             return sortDirection === 'asc' ? <IconArrowUp className="ml-2 h-4 w-4" /> : <IconArrowDown className="ml-2 h-4 w-4" />;
         };
 
-        // getStatusBadgeVariant remains the same
         const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
             switch (status?.toUpperCase()) {
                 case 'PENDING': return 'secondary';
-                case 'RECEIVED': case 'COMPLETED': return 'default'; // Consider 'success' if you add custom variants
+                case 'RECEIVED': case 'COMPLETED': return 'default';
                 case 'CANCELLED': return 'destructive';
                 case 'IN_TRANSIT': case 'DELIVERED': case 'RECEIVING': return 'outline';
                 default: return 'secondary';
             }
         };
 
-        // Function to open signature dialog
         const handleViewSignature = (signatureDataUrl: string) => {
             setSelectedSignature(signatureDataUrl);
             setIsSignatureDialogOpen(true);
         };
 
-        // Function to open verification dialog
         const handleOpenVerificationDialog = (shipment: ShipmentDetail) => {
             setSelectedShipmentForVerification(shipment);
             setVerifiedDeviceIds(new Set());
             setIsVerificationDialogOpen(true);
         };
 
-        // Handle checkbox change
         const handleCheckboxChange = (deviceId: string, checked: boolean | string) => {
             setVerifiedDeviceIds(prev => {
                 const newSet = new Set(prev);
-                if (checked === true) { // Check specifically for boolean true
+                if (checked === true) {
                     newSet.add(deviceId);
                 } else {
-                    // Handles false or 'indeterminate' (though indeterminate shouldn't occur here)
                     newSet.delete(deviceId);
                 }
                 return newSet;
             });
         };
 
-        // Implement actual verification submission logic
         const handleVerificationSubmit = async (verifiedIds: string[]) => {
             if (!selectedShipmentForVerification) return;
 
@@ -828,7 +762,6 @@ export default function AdminDashboardPage() {
                     description: `${result.verifiedDevicesCount} device(s) marked as checked in.`
                 });
 
-                // Update local state immediately
                 setShipments(prev => prev.map(s => s.id === shipmentId ? { ...s, status: 'COMPLETED' } : s));
                 setIsVerificationDialogOpen(false);
 
@@ -840,35 +773,27 @@ export default function AdminDashboardPage() {
             }
         };
 
-        // Function to trigger data refresh
         const triggerRefresh = useCallback(() => {
             setRefreshKey(prev => prev + 1);
         }, []);
 
-        // Modify useEffect to depend on refreshKey
         useEffect(() => {
             const fetchShipments = async () => {
                 // ... fetch logic ...
             };
             fetchShipments();
-        }, [sortColumn, sortDirection, parsedStatusFilter, debouncedPlainText, currentPage, refreshKey]); // Add refreshKey dependency
+        }, [sortColumn, sortDirection, parsedStatusFilter, debouncedPlainText, currentPage, refreshKey]);
 
-        // ... Row Click Handler ...
         const handleRowClick = (shortId: string | undefined) => {
             if (shortId) {
-                setSelectedShortId(shortId); // Set the ID for the modal
-                setIsDetailModalOpen(true); // Open the modal
-                // router.push(`/shipment/${shortId}`); // Remove navigation
+                setSelectedShortId(shortId);
+                setIsDetailModalOpen(true);
             }
         };
-        // ...
 
         return (
             <div className="flex flex-1 flex-col p-4 md:p-8 overflow-hidden">
                 <SonnerToaster richColors position="top-right" />
-
-                {/* == DIALOGS == */}
-                {/* Signature View Dialog */}
                 <Dialog open={isSignatureDialogOpen} onOpenChange={setIsSignatureDialogOpen}>
                     <DialogContent className="sm:max-w-[400px]">
                         <DialogHeader>
@@ -893,7 +818,6 @@ export default function AdminDashboardPage() {
                     </DialogContent>
                 </Dialog>
 
-                {/* Verification Dialog */}
                 <Dialog open={isVerificationDialogOpen} onOpenChange={setIsVerificationDialogOpen}>
                     <DialogContent className="sm:max-w-lg">
                         <DialogHeader>
@@ -918,7 +842,6 @@ export default function AdminDashboardPage() {
                                             htmlFor={`verify-${device.id}`}
                                             className="flex-grow text-sm font-normal cursor-pointer"
                                         >
-                                            {/* Add indicator for extra devices */}
                                             <span className="font-mono block">{device.serialNumber} {device.isExtraDevice && <span className="text-muted-foreground text-xs">(Extra)</span>}</span>
                                             <span className="text-xs text-muted-foreground">
                                                 {device.model || 'Unknown Model'} {device.assetTag && `(${device.assetTag})`}
@@ -943,9 +866,6 @@ export default function AdminDashboardPage() {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
-                {/* == END DIALOGS == */}
-
-                {/* == Header == */}
                 <div className="flex items-center justify-between mb-4 flex-shrink-0 flex-wrap gap-x-4 gap-y-2">
                     <div className="flex-shrink-0">
                         <h1 className="text-2xl font-semibold">Shipments</h1>
@@ -989,17 +909,12 @@ export default function AdminDashboardPage() {
                                         Enter the details for the new shipment manifest. Serial numbers are required.
                                     </DialogDescription>
                                 </DialogHeader>
-                                {/* Pass currentUser to CreateShipmentForm */}
                                 <CreateShipmentForm onSuccess={() => setIsCreateDialogOpen(false)} currentUser={currentUser} />
                             </DialogContent>
                         </Dialog>
                     </div>
                 </div>
-                {/* == End Header == */}
 
-                {/* Active Filter Chips Area - REMOVED */}
-
-                {/* Card and Table */}
                 <Card className="border-none shadow-none flex-grow flex flex-col overflow-hidden drop-shadow-xl">
                     <CardContent className="p-0 flex-grow overflow-hidden flex flex-col">
                         <div className="overflow-y-auto flex-grow">
@@ -1130,13 +1045,12 @@ export default function AdminDashboardPage() {
                     </CardFooter>
                 </Card>
 
-                {/* Render the Shipment Detail Modal */}
                 <ShipmentDetailModal
                     shortId={selectedShortId}
                     isOpen={isDetailModalOpen}
                     onOpenChange={setIsDetailModalOpen}
-                    onShipmentUpdate={triggerRefresh} // Pass refresh trigger
-                    currentUser={currentUser} // Pass currentUser to Detail Modal
+                    onShipmentUpdate={triggerRefresh}
+                    currentUser={currentUser}
                 />
             </div>
         );
@@ -1168,24 +1082,22 @@ export default function AdminDashboardPage() {
     );
 }
 
-// --- CreateShipmentForm --- 
 interface CreateShipmentFormProps {
     onSuccess?: () => void;
-    currentUser?: { name?: string | null; email?: string | null }; // Add currentUser prop
+    currentUser?: { name?: string | null; email?: string | null };
 }
 
-// Use the defined interface for props
 const CreateShipmentForm = ({ onSuccess, currentUser }: CreateShipmentFormProps) => {
-  // Initialize state with currentUser data or empty string
-  const [senderName, setSenderName] = useState(currentUser?.name ?? '');
-  const [senderEmail, setSenderEmail] = useState(currentUser?.email ?? '');
-  const [devices, setDevices] = useState<DeviceInput[]>([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+    // Initialize state with currentUser data or empty string
+    const [senderName, setSenderName] = useState(currentUser?.name ?? '');
+    const [senderEmail, setSenderEmail] = useState(currentUser?.email ?? '');
+    const [devices, setDevices] = useState<DeviceInput[]>([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
     const [locationInputValue, setLocationInputValue] = useState<string>('');
     const [trackingNumber, setTrackingNumber] = useState('');
     const [notifyEmails, setNotifyEmails] = useState('');
     const [notes, setNotes] = useState('');
     const [clientReferenceId, setClientReferenceId] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [locations, setLocations] = useState<PrismaLocation[]>([]);
     const [isLoadingLocations, setIsLoadingLocations] = useState(false);
     const [isLocationPopoverOpen, setIsLocationPopoverOpen] = useState(false);
@@ -1212,77 +1124,77 @@ const CreateShipmentForm = ({ onSuccess, currentUser }: CreateShipmentFormProps)
     }, []);
 
     // Update handleDeviceChange to use keys of DeviceInput
-  const handleDeviceChange = (index: number, field: keyof Omit<DeviceInput, 'id'>, value: string) => {
-    const newDevices = [...devices];
+    const handleDeviceChange = (index: number, field: keyof Omit<DeviceInput, 'id'>, value: string) => {
+        const newDevices = [...devices];
         // This assignment is safe now because DeviceInput only has string fields
-    newDevices[index][field] = value;
-    setDevices(newDevices);
-  };
+        newDevices[index][field] = value;
+        setDevices(newDevices);
+    };
 
-  const addDevice = () => {
-    setDevices([...devices, { id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
-  };
+    const addDevice = () => {
+        setDevices([...devices, { id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+    };
 
-  const removeDevice = (index: number) => {
-    const newDevices = devices.filter((_, i) => i !== index);
-    if (newDevices.length === 0) {
-      setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
-    } else {
-      setDevices(newDevices);
-    }
-  };
+    const removeDevice = (index: number) => {
+        const newDevices = devices.filter((_, i) => i !== index);
+        if (newDevices.length === 0) {
+            setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+        } else {
+            setDevices(newDevices);
+        }
+    };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsLoading(true);
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setIsLoading(true);
 
-    const validDevices = devices.filter(d => d.serialNumber.trim() !== '').map(d => ({
-        serialNumber: d.serialNumber.trim(),
+        const validDevices = devices.filter(d => d.serialNumber.trim() !== '').map(d => ({
+            serialNumber: d.serialNumber.trim(),
             assetTag: d.assetTag.trim() || undefined,
             model: d.model.trim() || undefined,
-    }));
+        }));
 
-    if (validDevices.length === 0) {
+        if (validDevices.length === 0) {
             toast.error("No valid devices added.", { description: "At least one device with a serial number is required." });
-      setIsLoading(false);
-      return;
-    }
+            setIsLoading(false);
+            return;
+        }
 
         if (!locationInputValue.trim()) {
             toast.error("Location is required.", { description: "Please select or enter a location." });
-        setIsLoading(false);
-        return;
-    }
+            setIsLoading(false);
+            return;
+        }
 
-    try {
-      const response = await fetch('/api/shipments', {
-        method: 'POST',
+        try {
+            const response = await fetch('/api/shipments', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            senderName: senderName.trim(),
-            senderEmail: senderEmail.trim(),
+                body: JSON.stringify({
+                    senderName: senderName.trim(),
+                    senderEmail: senderEmail.trim(),
                     locationValue: locationInputValue.trim(),
                     trackingNumber: trackingNumber.trim() || null,
                     notifyEmails: notifyEmails.trim() || null,
                     notes: notes.trim() || null,
                     clientReferenceId: clientReferenceId.trim() || null,
                     devices: validDevices,
-        }),
-      });
+                }),
+            });
 
-      const data = await response.json();
+            const data = await response.json();
 
-      if (!response.ok) {
+            if (!response.ok) {
                 throw new Error(data.error || `Shipment creation failed (HTTP ${response.status})`);
-      }
+            }
 
-      toast.success("Shipment Created Successfully!", {
+            toast.success("Shipment Created Successfully!", {
                 description: `Shipment ID: ${data.id}`,
             });
 
-      setSenderName('');
-      setSenderEmail('');
-      setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
+            setSenderName('');
+            setSenderEmail('');
+            setDevices([{ id: crypto.randomUUID(), serialNumber: '', assetTag: '', model: '' }]);
             setLocationInputValue('');
             setTrackingNumber('');
             setNotifyEmails('');
@@ -1292,25 +1204,25 @@ const CreateShipmentForm = ({ onSuccess, currentUser }: CreateShipmentFormProps)
             if (onSuccess) {
                 onSuccess();
             }
-    } catch (err: any) {
+        } catch (err: any) {
             console.error("Error creating shipment:", err);
             toast.error("Shipment Creation Failed", { description: err.message });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  return (
+    return (
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+                <div className="space-y-2">
                     <Label htmlFor="modal-sender-name">Sender Name</Label>
                     <Input id="modal-sender-name" value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your Name / Dept" required />
-              </div>
-              <div className="space-y-2">
+                </div>
+                <div className="space-y-2">
                     <Label htmlFor="modal-sender-email">Sender Email</Label>
                     <Input id="modal-sender-email" type="email" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} placeholder="your.email@example.com" required />
-              </div>
+                </div>
             </div>
 
             <div className="space-y-2">
@@ -1371,30 +1283,30 @@ const CreateShipmentForm = ({ onSuccess, currentUser }: CreateShipmentFormProps)
 
             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
                 <h4 className="font-medium text-sm">Devices</h4>
-              {devices.map((device, index) => (
+                {devices.map((device, index) => (
                     <div key={device.id} className="flex items-end gap-2">
                         <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="space-y-1">
+                            <div className="space-y-1">
                                 <Label htmlFor={`modal-serial-${index}`} className="text-xs">Serial*</Label>
                                 <Input id={`modal-serial-${index}`} value={device.serialNumber} onChange={(e) => handleDeviceChange(index, 'serialNumber', e.target.value)} placeholder="C02X..." required />
-                    </div>
-                    <div className="space-y-1">
+                            </div>
+                            <div className="space-y-1">
                                 <Label htmlFor={`modal-asset-${index}`} className="text-xs">Asset Tag</Label>
                                 <Input id={`modal-asset-${index}`} value={device.assetTag} onChange={(e) => handleDeviceChange(index, 'assetTag', e.target.value)} placeholder="ASSET-123" />
-                    </div>
-                    <div className="space-y-1">
+                            </div>
+                            <div className="space-y-1">
                                 <Label htmlFor={`modal-model-${index}`} className="text-xs">Model</Label>
                                 <Input id={`modal-model-${index}`} value={device.model} onChange={(e) => handleDeviceChange(index, 'model', e.target.value)} placeholder="iPad 9th Gen" />
-                    </div>
-                  </div>
+                            </div>
+                        </div>
                         <Button type="button" variant="ghost" size="icon" onClick={() => removeDevice(index)} disabled={devices.length <= 1} className="text-red-500 hover:text-red-700 disabled:opacity-50 shrink-0" aria-label="Remove device">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                ))}
                 <Button type="button" variant="outline" size="sm" onClick={addDevice} className="mt-2 w-full">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Another Device
-              </Button>
+                </Button>
             </div>
 
             <div className="space-y-2">
@@ -1444,9 +1356,9 @@ const CreateShipmentForm = ({ onSuccess, currentUser }: CreateShipmentFormProps)
             <DialogFooter>
                 <Button type="submit" disabled={isLoading}>
                     {isLoading ? <><IconLoader2 className="animate-spin mr-2" /> Creating...</> : 'Create Shipment'}
-            </Button>
+                </Button>
             </DialogFooter>
         </form>
-  );
+    );
 };
 
